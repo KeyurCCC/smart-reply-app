@@ -1,0 +1,61 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isInParticipants(participants) {
+      return isSignedIn() && request.auth.uid in participants;
+    }
+
+    // Caller is a member of the conversation (works inside batched writes
+    // because Firestore evaluates all batch operations together).
+    function isConversationParticipant(conversationId) {
+      return isSignedIn() && request.auth.uid in getAfter(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.get('participants', []);
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
+
+      match /inbox/{conversationId} {
+        // Owner can always read/write their own inbox.
+        // Conversation participants can create/update inbox entries for BOTH
+        // users when starting a chat or sending a message (batch write).
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          || isConversationParticipant(conversationId);
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if isSignedIn();
+
+      allow create: if isInParticipants(
+        request.resource.data.get('participants', [])
+      );
+
+      allow update: if isInParticipants(
+        resource.data.get('participants', [])
+      ) || isInParticipants(
+        request.resource.data.get('participants', [])
+      );
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+  }
+}
