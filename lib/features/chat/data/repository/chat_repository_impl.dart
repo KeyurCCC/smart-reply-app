@@ -5,11 +5,12 @@ import 'package:smart_reply_app/core/utils/conversation_id.dart';
 import 'package:smart_reply_app/features/auth/domain/repository/auth_repository.dart';
 import 'package:smart_reply_app/features/chat/data/datasources/firestore_chat_datasource.dart';
 import 'package:smart_reply_app/features/chat/data/models/chat_message_model.dart';
-import 'package:smart_reply_app/features/chat/data/services/smart_reply_service.dart';
+import 'package:smart_reply_app/features/chat/domain/entities/smart_reply_result.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_user.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/conversation.dart';
 import 'package:smart_reply_app/features/chat/domain/repository/chat_repository.dart';
+import 'package:smart_reply_app/features/chat/domain/services/smart_reply_provider.dart';
 import 'package:smart_reply_app/features/users/domain/repository/user_repository.dart';
 import 'package:uuid/uuid.dart';
 
@@ -17,14 +18,14 @@ class ChatRepositoryImpl implements ChatRepository {
   final FirestoreChatDatasource datasource;
   final AuthRepository authRepository;
   final UserRepository userRepository;
-  final SmartReplyService smartReplyService;
+  final SmartReplyProvider smartReplyProvider;
   final Uuid uuid;
 
   ChatRepositoryImpl({
     required this.datasource,
     required this.authRepository,
     required this.userRepository,
-    required this.smartReplyService,
+    required this.smartReplyProvider,
     Uuid? uuid,
   }) : uuid = uuid ?? const Uuid();
 
@@ -215,11 +216,13 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<List<String>> generateSmartReplies(List<ChatMessage> messages) {
+  Future<SmartReplyResult> generateSmartReplies(List<ChatMessage> messages) {
     final userId = _currentUserId;
-    if (userId == null) return Future.value(const []);
+    if (userId == null) {
+      return Future.value(const SmartReplyResult());
+    }
 
-    return smartReplyService.generateReplies(
+    return smartReplyProvider.generateReplies(
       messages: messages,
       currentUserId: userId,
     );

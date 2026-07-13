@@ -11,6 +11,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatRepository repository;
 
   StreamSubscription<List<ChatMessage>>? _chatSubscription;
+  String? _conversationId;
+  int _reconnectAttempts = 0;
+  static const _maxReconnectAttempts = 6;
+
+  int _smartReplyGeneration = 0;
 
   ChatBloc(this.repository) : super(ChatInitial()) {
     on<LoadChatEvent>(_loadChat);
@@ -19,12 +24,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<GenerateSmartReplyEvent>(_generateReplies);
     on<DeleteMessageEvent>(_deleteMessage);
     on<ClearSmartRepliesEvent>(_clearSmartReplies);
+    on<ReconnectChatEvent>(_reconnectChat);
   }
 
   @override
   Future<void> close() async {
     await _chatSubscription?.cancel();
     _chatSubscription = null;
+    _conversationId = null;
     return super.close();
   }
 
@@ -33,6 +40,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _loadChat(LoadChatEvent event, Emitter<ChatState> emit) async {
+    _conversationId = event.conversationId;
+    _reconnectAttempts = 0;
     emit(ChatLoading());
 
     try {
@@ -55,17 +64,51 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       // Non-fatal: still allow reading messages.
     }
 
+    _subscribeToMessages(event.conversationId);
+  }
+
+  void _subscribeToMessages(String conversationId) {
     _chatSubscription?.cancel();
-    _chatSubscription = repository
-        .listenMessages(event.conversationId)
-        .listen(
+    _chatSubscription = repository.listenMessages(conversationId).listen(
       (messages) {
+        _reconnectAttempts = 0;
         _safeAdd(ReceiveMessagesEvent(messages));
       },
-      onError: (error) {
-        emit(ChatError('Messages stream: $error'));
+      onError: (_) {
+        _safeAdd(ReconnectChatEvent());
       },
     );
+  }
+
+  Future<void> _reconnectChat(
+    ReconnectChatEvent event,
+    Emitter<ChatState> emit,
+  ) async {
+    final conversationId = _conversationId;
+    if (conversationId == null) return;
+
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      emit(
+        ChatError(
+          'Connection lost. Pull down or reopen the chat to retry.',
+        ),
+      );
+      return;
+    }
+
+    _reconnectAttempts++;
+    final delaySeconds = _reconnectAttempts.clamp(1, 5);
+    await Future<void>.delayed(Duration(seconds: delaySeconds));
+
+    try {
+      await repository.ensureAuthReady();
+    } catch (_) {
+      _safeAdd(ReconnectChatEvent());
+      return;
+    }
+
+    if (isClosed) return;
+    _subscribeToMessages(conversationId);
   }
 
   Future<void> _receiveMessages(
@@ -91,6 +134,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     try {
       _safeAdd(ClearSmartRepliesEvent());
+      await repository.ensureAuthReady();
       await repository.sendMessage(
         conversationId: event.conversationId,
         message: event.message,
@@ -107,11 +151,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (state is! ChatLoaded) return;
 
     final current = state as ChatLoaded;
-    final replies = await repository.generateSmartReplies(event.messages);
+    final generation = ++_smartReplyGeneration;
 
-    if (state is ChatLoaded) {
-      emit(ChatLoaded(messages: current.messages, smartReplies: replies));
-    }
+    emit(
+      ChatLoaded(
+        messages: current.messages,
+        smartReplies: current.smartReplies,
+        isGeneratingSmartReplies: true,
+        smartReplyError: null,
+      ),
+    );
+
+    final result = await repository.generateSmartReplies(event.messages);
+    if (generation != _smartReplyGeneration || state is! ChatLoaded) return;
+
+    emit(
+      ChatLoaded(
+        messages: current.messages,
+        smartReplies: result.replies,
+        isGeneratingSmartReplies: false,
+        smartReplyError:
+            result.replies.isEmpty ? result.error : null,
+      ),
+    );
   }
 
   Future<void> _clearSmartReplies(
@@ -120,7 +182,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     if (state is ChatLoaded) {
       final current = state as ChatLoaded;
-      emit(ChatLoaded(messages: current.messages, smartReplies: const []));
+      emit(
+        ChatLoaded(
+          messages: current.messages,
+          smartReplies: const [],
+          isGeneratingSmartReplies: false,
+          smartReplyError: null,
+        ),
+      );
     }
   }
 

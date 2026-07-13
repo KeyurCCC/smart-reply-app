@@ -21,3 +21,5 @@ class ConversationsFailedEvent extends ConversationsEvent {
 
   ConversationsFailedEvent(this.message);
 }
+
+class ReconnectConversationsEvent extends ConversationsEvent {}

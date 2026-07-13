@@ -111,6 +111,33 @@ class _ChatPageState extends State<ChatPage> {
             ),
             BlocBuilder<ChatBloc, ChatState>(
               builder: (context, state) {
+                if (state is ChatLoaded && state.isGeneratingSmartReplies) {
+                  return const LinearProgressIndicator(minHeight: 2);
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            BlocBuilder<ChatBloc, ChatState>(
+              builder: (context, state) {
+                if (state is ChatLoaded &&
+                    state.smartReplyError != null &&
+                    state.smartReplies.isEmpty &&
+                    !state.isGeneratingSmartReplies) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                    child: Text(
+                      state.smartReplyError!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            BlocBuilder<ChatBloc, ChatState>(
+              builder: (context, state) {
                 final replies =
                     state is ChatLoaded ? state.smartReplies : const <String>[];
                 return SmartReplyChips(

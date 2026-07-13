@@ -32,6 +32,8 @@ class GenerateSmartReplyEvent extends ChatEvent {
 
 class ClearSmartRepliesEvent extends ChatEvent {}
 
+class ReconnectChatEvent extends ChatEvent {}
+
 class DeleteMessageEvent extends ChatEvent {
   final String conversationId;
   final String messageId;

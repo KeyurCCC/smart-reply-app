@@ -1,5 +1,6 @@
 import 'package:smart_reply_app/core/result/result.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
+import 'package:smart_reply_app/features/chat/domain/entities/smart_reply_result.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/conversation.dart';
 
 abstract class ChatRepository {
@@ -21,7 +22,7 @@ abstract class ChatRepository {
     required String messageId,
   });
 
-  Future<List<String>> generateSmartReplies(List<ChatMessage> messages);
+  Future<SmartReplyResult> generateSmartReplies(List<ChatMessage> messages);
 
   Future<void> markConversationRead(String conversationId);
 

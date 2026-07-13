@@ -1,0 +1,4 @@
+enum SmartReplyMode {
+  mlKit,
+  gemini,
+}

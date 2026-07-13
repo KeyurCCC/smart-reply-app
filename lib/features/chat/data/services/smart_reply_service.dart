@@ -1,12 +1,15 @@
 import 'package:google_mlkit_smart_reply/google_mlkit_smart_reply.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
+import 'package:smart_reply_app/features/chat/domain/entities/smart_reply_result.dart';
+import 'package:smart_reply_app/features/chat/domain/services/smart_reply_provider.dart';
 
-class SmartReplyService {
-  Future<List<String>> generateReplies({
+class MlKitSmartReplyService implements SmartReplyProvider {
+  @override
+  Future<SmartReplyResult> generateReplies({
     required List<ChatMessage> messages,
     required String currentUserId,
   }) async {
-    if (messages.isEmpty) return [];
+    if (messages.isEmpty) return const SmartReplyResult();
 
     final smartReply = SmartReply();
     try {
@@ -31,7 +34,9 @@ class SmartReplyService {
       }
 
       final response = await smartReply.suggestReplies();
-      return response.suggestions;
+      return SmartReplyResult(replies: response.suggestions);
+    } catch (e) {
+      return SmartReplyResult(error: e.toString());
     } finally {
       smartReply.close();
     }

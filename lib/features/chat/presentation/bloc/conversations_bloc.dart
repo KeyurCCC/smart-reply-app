@@ -16,6 +16,8 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
   final AuthRepository authRepository;
 
   StreamSubscription<List<Conversation>>? _subscription;
+  int _reconnectAttempts = 0;
+  static const _maxReconnectAttempts = 6;
 
   ConversationsBloc({
     required this.chatRepository,
@@ -25,6 +27,7 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     on<LoadConversationsEvent>(_onLoad);
     on<ConversationsUpdatedEvent>(_onUpdated);
     on<ConversationsFailedEvent>(_onFailed);
+    on<ReconnectConversationsEvent>(_onReconnect);
     on<StartConversationByEmailEvent>(_onStartByEmail);
   }
 
@@ -43,7 +46,12 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     LoadConversationsEvent event,
     Emitter<ConversationsState> emit,
   ) async {
+    _reconnectAttempts = 0;
     emit(ConversationsLoading());
+    await _startListening(emit);
+  }
+
+  Future<void> _startListening(Emitter<ConversationsState> emit) async {
     await _subscription?.cancel();
     _subscription = null;
 
@@ -56,14 +64,36 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
       }
 
       _subscription = chatRepository.listenConversations().listen(
-        (conversations) =>
-            _safeAdd(ConversationsUpdatedEvent(conversations)),
-        onError: (error) =>
-            _safeAdd(ConversationsFailedEvent(error.toString())),
+        (conversations) {
+          _reconnectAttempts = 0;
+          _safeAdd(ConversationsUpdatedEvent(conversations));
+        },
+        onError: (_) => _safeAdd(ReconnectConversationsEvent()),
       );
     } catch (e) {
       emit(ConversationsError(e.toString()));
     }
+  }
+
+  Future<void> _onReconnect(
+    ReconnectConversationsEvent event,
+    Emitter<ConversationsState> emit,
+  ) async {
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      emit(
+        ConversationsError(
+          'Connection lost. Reopen the app or pull to refresh.',
+        ),
+      );
+      return;
+    }
+
+    _reconnectAttempts++;
+    final delaySeconds = _reconnectAttempts.clamp(1, 5);
+    await Future<void>.delayed(Duration(seconds: delaySeconds));
+
+    if (isClosed) return;
+    await _startListening(emit);
   }
 
   void _onUpdated(
@@ -77,7 +107,7 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     ConversationsFailedEvent event,
     Emitter<ConversationsState> emit,
   ) {
-    emit(ConversationsError(event.message));
+    _safeAdd(ReconnectConversationsEvent());
   }
 
   Future<void> _onStartByEmail(

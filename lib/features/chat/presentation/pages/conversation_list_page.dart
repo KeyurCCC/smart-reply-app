@@ -8,6 +8,7 @@ import 'package:smart_reply_app/features/chat/presentation/bloc/conversations_bl
 import 'package:smart_reply_app/features/chat/presentation/bloc/conversations_event.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/conversations_state.dart';
 import 'package:smart_reply_app/features/chat/presentation/pages/chat_page.dart';
+import 'package:smart_reply_app/features/settings/presentation/pages/settings_page.dart';
 
 class ConversationListPage extends StatefulWidget {
   const ConversationListPage({super.key});
@@ -127,6 +128,17 @@ class _ConversationListPageState extends State<ConversationListPage> {
             appBar: AppBar(
               title: const Text('Chats'),
               actions: [
+                IconButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsPage(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.settings),
+                  tooltip: 'Settings',
+                ),
                 if (user?.photoURL != null)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),

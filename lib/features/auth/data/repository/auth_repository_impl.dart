@@ -66,8 +66,21 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> ensureAuthReady() async {
     final user = firebaseAuth.currentUser;
-    if (user != null) {
-      await user.getIdToken(true);
+    if (user == null) return;
+
+    Object? lastError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        await user.getIdToken(true);
+        return;
+      } catch (e) {
+        lastError = e;
+        if (attempt < 2) {
+          await Future<void>.delayed(Duration(seconds: 1 << attempt));
+        }
+      }
     }
+
+    throw Exception('Failed to refresh auth token: $lastError');
   }
 }
