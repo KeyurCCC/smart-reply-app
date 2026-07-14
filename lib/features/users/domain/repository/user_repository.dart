@@ -8,4 +8,8 @@ abstract class UserRepository {
   Future<AppUser?> findUserByEmail(String email);
 
   Stream<AppUser?> listenUser(String uid);
+
+  void trackUserPresence(String userId);
+
+  Future<void> setUserOffline(String userId);
 }

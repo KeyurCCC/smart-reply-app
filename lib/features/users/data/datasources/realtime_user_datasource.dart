@@ -9,6 +9,10 @@ abstract class RealtimeUserDatasource {
   Future<AppUser?> findUserByEmail(String email);
 
   Stream<AppUser?> listenUser(String uid);
+
+  void trackUserPresence(String userId);
+
+  Future<void> setUserOffline(String userId);
 }
 
 class RealtimeUserDatasourceImpl implements RealtimeUserDatasource {
@@ -70,6 +74,32 @@ class RealtimeUserDatasourceImpl implements RealtimeUserDatasource {
     });
   }
 
+  @override
+  void trackUserPresence(String userId) {
+    final connectedRef = database.ref('.info/connected');
+    final userRef = database.ref('users/$userId');
+
+    connectedRef.onValue.listen((event) {
+      final connected = event.snapshot.value == true;
+      if (connected) {
+        userRef.update({
+          'online': true,
+        });
+
+        userRef.child('online').onDisconnect().set(false);
+        userRef.child('lastSeen').onDisconnect().set(ServerValue.timestamp);
+      }
+    });
+  }
+
+  @override
+  Future<void> setUserOffline(String userId) async {
+    await database.ref('users/$userId').update({
+      'online': false,
+      'lastSeen': ServerValue.timestamp,
+    });
+  }
+
   AppUser _fromMap(String id, Map<String, dynamic> data) {
     final createdAtVal = data['createdAt'];
     DateTime createdAt;
@@ -78,12 +108,21 @@ class RealtimeUserDatasourceImpl implements RealtimeUserDatasource {
     } else {
       createdAt = DateTime.now();
     }
+
+    final lastSeenVal = data['lastSeen'];
+    DateTime? lastSeen;
+    if (lastSeenVal is int) {
+      lastSeen = DateTime.fromMillisecondsSinceEpoch(lastSeenVal);
+    }
+
     return AppUser(
       id: id,
       displayName: data['displayName'] as String? ?? 'User',
       email: data['email'] as String? ?? '',
       photoUrl: data['photoUrl'] as String?,
       createdAt: createdAt,
+      online: data['online'] as bool? ?? false,
+      lastSeen: lastSeen,
     );
   }
 }

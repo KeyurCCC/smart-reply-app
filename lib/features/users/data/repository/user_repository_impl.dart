@@ -26,4 +26,14 @@ class UserRepositoryImpl implements UserRepository {
   Stream<AppUser?> listenUser(String uid) {
     return datasource.listenUser(uid);
   }
+
+  @override
+  void trackUserPresence(String userId) {
+    datasource.trackUserPresence(userId);
+  }
+
+  @override
+  Future<void> setUserOffline(String userId) {
+    return datasource.setUserOffline(userId);
+  }
 }

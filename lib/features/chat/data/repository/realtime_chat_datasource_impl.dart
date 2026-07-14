@@ -46,7 +46,10 @@ class RealtimeChatDatasourceImpl implements RealtimeChatDatasource {
       );
     }
 
-    return database.ref('messages/$conversationId').onValue.map((event) {
+    return database
+        .ref('messages/$conversationId')
+        .onValue
+        .map((event) {
       final data = event.snapshot.value;
       if (data is! Map) return [];
 

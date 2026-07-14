@@ -85,7 +85,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   void _subscribeToMessages(String conversationId) {
     _chatSubscription?.cancel();
-    _chatSubscription = repository.listenMessages(conversationId).listen(
+    _chatSubscription = repository
+        .listenMessages(conversationId)
+        .listen(
       (messages) {
         _reconnectAttempts = 0;
         _safeAdd(ReceiveMessagesEvent(messages));
@@ -171,7 +173,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     try {
       _safeAdd(ClearSmartRepliesEvent());
-      await repository.ensureAuthReady();
       await repository.sendMessage(
         conversationId: event.conversationId,
         message: event.message,

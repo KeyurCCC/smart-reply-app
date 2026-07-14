@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:smart_reply_app/features/users/domain/entities/app_user.dart';
+import 'package:smart_reply_app/features/users/domain/repository/user_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:smart_reply_app/core/di/injection.dart';
@@ -50,6 +52,50 @@ class _ConversationListPageState extends State<ConversationListPage> {
       orElse: () => conversation.participants.first,
     );
     return partner.imageUrl;
+  }
+
+  String _partnerId(Conversation conversation) {
+    final currentUserId = getIt<AuthRepository>().currentUserId;
+    final partner = conversation.participants.firstWhere(
+      (user) => user.id != currentUserId,
+      orElse: () => conversation.participants.first,
+    );
+    return partner.id;
+  }
+
+  Widget _buildPresenceAvatar(Conversation conversation, String partnerName, String? photoUrl) {
+    final partnerId = _partnerId(conversation);
+    return StreamBuilder<AppUser?>(
+      stream: getIt<UserRepository>().listenUser(partnerId),
+      builder: (context, snapshot) {
+        final isOnline = snapshot.data?.online ?? false;
+        return Stack(
+          children: [
+            CircleAvatar(
+              backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+              child: photoUrl == null ? Text(partnerName.characters.first) : null,
+            ),
+            if (isOnline)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _showNewChatDialog() async {
@@ -175,14 +221,7 @@ class _ConversationListPageState extends State<ConversationListPage> {
                               );
 
                           return ListTile(
-                            leading: CircleAvatar(
-                              backgroundImage: photoUrl != null
-                                  ? NetworkImage(photoUrl)
-                                  : null,
-                              child: photoUrl == null
-                                  ? Text(partnerName.characters.first)
-                                  : null,
-                            ),
+                            leading: _buildPresenceAvatar(conversation, partnerName, photoUrl),
                             title: Text(partnerName),
                             subtitle: Text(
                               conversation.lastMessage.isEmpty

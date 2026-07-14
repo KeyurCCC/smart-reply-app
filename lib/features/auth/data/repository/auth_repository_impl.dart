@@ -16,7 +16,14 @@ class AuthRepositoryImpl implements AuthRepository {
   });
 
   @override
-  Stream<User?> authStateChanges() => firebaseAuth.authStateChanges();
+  Stream<User?> authStateChanges() {
+    return firebaseAuth.authStateChanges().map((user) {
+      if (user != null) {
+        userRepository.trackUserPresence(user.uid);
+      }
+      return user;
+    });
+  }
 
   @override
   User? get currentUser => firebaseAuth.currentUser;
@@ -50,6 +57,7 @@ class AuthRepositoryImpl implements AuthRepository {
           createdAt: DateTime.now(),
         ),
       );
+      userRepository.trackUserPresence(user.uid);
     }
 
     return userCredential;
@@ -57,6 +65,14 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> signOut() async {
+    final uid = currentUserId;
+    if (uid != null) {
+      try {
+        await userRepository.setUserOffline(uid);
+      } catch (_) {
+        // Non-fatal
+      }
+    }
     await Future.wait([
       firebaseAuth.signOut(),
       googleSignIn.signOut(),

@@ -4,6 +4,8 @@ class AppUser {
   final String email;
   final String? photoUrl;
   final DateTime createdAt;
+  final bool online;
+  final DateTime? lastSeen;
 
   const AppUser({
     required this.id,
@@ -11,5 +13,7 @@ class AppUser {
     required this.email,
     this.photoUrl,
     required this.createdAt,
+    this.online = false,
+    this.lastSeen,
   });
 }
