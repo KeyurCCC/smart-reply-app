@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:smart_reply_app/core/enums/message_status.dart';
+import 'package:smart_reply_app/core/utils/conversation_id.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 import 'package:smart_reply_app/features/chat/domain/repository/chat_repository.dart';
 
@@ -11,6 +13,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatRepository repository;
 
   StreamSubscription<List<ChatMessage>>? _chatSubscription;
+  StreamSubscription<bool>? _typingSubscription;
   String? _conversationId;
   int _reconnectAttempts = 0;
   static const _maxReconnectAttempts = 6;
@@ -25,12 +28,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<DeleteMessageEvent>(_deleteMessage);
     on<ClearSmartRepliesEvent>(_clearSmartReplies);
     on<ReconnectChatEvent>(_reconnectChat);
+    on<UpdateTypingStatusEvent>(_updateTypingStatus);
+    on<ReceiveTypingStatusEvent>(_receiveTypingStatus);
   }
 
   @override
   Future<void> close() async {
     await _chatSubscription?.cancel();
     _chatSubscription = null;
+    await _typingSubscription?.cancel();
+    _typingSubscription = null;
     _conversationId = null;
     return super.close();
   }
@@ -65,6 +72,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     _subscribeToMessages(event.conversationId);
+
+    final participants = participantsFromConversationId(event.conversationId);
+    final partnerId = participants.firstWhere(
+      (id) => id != repository.currentUserId,
+      orElse: () => '',
+    );
+    if (partnerId.isNotEmpty) {
+      _subscribeToTyping(event.conversationId, partnerId);
+    }
   }
 
   void _subscribeToMessages(String conversationId) {
@@ -116,7 +132,28 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final currentUserId = repository.currentUserId;
-    emit(ChatLoaded(messages: event.messages));
+
+    bool isPartnerTyping = false;
+    if (state is ChatLoaded) {
+      isPartnerTyping = (state as ChatLoaded).partnerTyping;
+    }
+
+    emit(
+      ChatLoaded(
+        messages: event.messages,
+        partnerTyping: isPartnerTyping,
+      ),
+    );
+
+    if (currentUserId != null && _conversationId != null) {
+      final unreadMessageIds = event.messages
+          .where((m) => m.senderId != currentUserId && m.status != MessageStatus.read)
+          .map((m) => m.id)
+          .toList();
+      if (unreadMessageIds.isNotEmpty) {
+        repository.markMessagesAsRead(_conversationId!, unreadMessageIds);
+      }
+    }
 
     final last = event.messages.isNotEmpty ? event.messages.last : null;
     if (last != null &&
@@ -201,5 +238,45 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       conversationId: event.conversationId,
       messageId: event.messageId,
     );
+  }
+
+  void _subscribeToTyping(String conversationId, String partnerId) {
+    _typingSubscription?.cancel();
+    _typingSubscription = repository
+        .listenTypingStatus(
+      conversationId: conversationId,
+      partnerId: partnerId,
+    )
+        .listen((isTyping) {
+      _safeAdd(ReceiveTypingStatusEvent(isTyping));
+    });
+  }
+
+  Future<void> _updateTypingStatus(
+    UpdateTypingStatusEvent event,
+    Emitter<ChatState> emit,
+  ) async {
+    await repository.updateTypingStatus(
+      conversationId: event.conversationId,
+      typing: event.typing,
+    );
+  }
+
+  void _receiveTypingStatus(
+    ReceiveTypingStatusEvent event,
+    Emitter<ChatState> emit,
+  ) {
+    if (state is ChatLoaded) {
+      final current = state as ChatLoaded;
+      emit(
+        ChatLoaded(
+          messages: current.messages,
+          smartReplies: current.smartReplies,
+          isGeneratingSmartReplies: current.isGeneratingSmartReplies,
+          smartReplyError: current.smartReplyError,
+          partnerTyping: event.isTyping,
+        ),
+      );
+    }
   }
 }

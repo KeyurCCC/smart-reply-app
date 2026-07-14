@@ -26,7 +26,9 @@ final getIt = GetIt.instance;
 Future<void> configureDependencies() async {
   final sharedPreferences = await SharedPreferences.getInstance();
 
-  getIt.registerLazySingleton<FirebaseDatabase>(() => FirebaseDatabase.instance);
+  final database = FirebaseDatabase.instance;
+  database.setPersistenceEnabled(true);
+  getIt.registerLazySingleton<FirebaseDatabase>(() => database);
   getIt.registerLazySingleton<FirebaseAuth>(() => FirebaseAuth.instance);
   getIt.registerLazySingleton<GoogleSignIn>(() => GoogleSignIn());
   getIt.registerLazySingleton<SharedPreferences>(() => sharedPreferences);

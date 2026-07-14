@@ -230,4 +230,37 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<void> ensureAuthReady() {
     return authRepository.ensureAuthReady();
   }
+
+  @override
+  Future<void> updateTypingStatus({
+    required String conversationId,
+    required bool typing,
+  }) async {
+    final userId = _currentUserId;
+    if (userId == null) return;
+    return datasource.updateTypingStatus(
+      conversationId: conversationId,
+      userId: userId,
+      typing: typing,
+    );
+  }
+
+  @override
+  Stream<bool> listenTypingStatus({
+    required String conversationId,
+    required String partnerId,
+  }) {
+    return datasource.listenTypingStatus(
+      conversationId: conversationId,
+      partnerId: partnerId,
+    );
+  }
+
+  @override
+  Future<void> markMessagesAsRead(String conversationId, List<String> messageIds) {
+    return datasource.markMessagesAsRead(
+      conversationId: conversationId,
+      messageIds: messageIds,
+    );
+  }
 }

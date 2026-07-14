@@ -11,12 +11,14 @@ class ChatLoaded extends ChatState {
   final List<String> smartReplies;
   final bool isGeneratingSmartReplies;
   final String? smartReplyError;
+  final bool partnerTyping;
 
   ChatLoaded({
     required this.messages,
     this.smartReplies = const [],
     this.isGeneratingSmartReplies = false,
     this.smartReplyError,
+    this.partnerTyping = false,
   });
 }
 

@@ -118,19 +118,36 @@ class RealtimeChatDatasourceImpl implements RealtimeChatDatasource {
   @override
   Future<void> updateTypingStatus({
     required String conversationId,
+    required String userId,
     required bool typing,
   }) async {
-    final data = await getConversation(conversationId);
-    final participants =
-        (data?['participants'] as List<dynamic>?)?.cast<String>() ?? [];
-    if (participants.isEmpty) return;
+    final typingRef = database.ref('conversations/$conversationId/typing/$userId');
+    final timeRef = database.ref('conversations/$conversationId/updatedAt');
 
-    final updates = {
-      'conversations/$conversationId/typing': typing,
-      'conversations/$conversationId/updatedAt':
-          DateTime.now().millisecondsSinceEpoch,
-    };
-    await database.ref().update(updates);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (typing) {
+      await typingRef.set(true);
+      await timeRef.set(now);
+      await typingRef.onDisconnect().set(false);
+    } else {
+      await typingRef.set(false);
+      await timeRef.set(now);
+      await typingRef.onDisconnect().cancel();
+    }
+  }
+
+  @override
+  Stream<bool> listenTypingStatus({
+    required String conversationId,
+    required String partnerId,
+  }) {
+    return database
+        .ref('conversations/$conversationId/typing/$partnerId')
+        .onValue
+        .map((event) {
+      final value = event.snapshot.value;
+      return value == true;
+    });
   }
 
   @override
@@ -141,6 +158,19 @@ class RealtimeChatDatasourceImpl implements RealtimeChatDatasource {
     await database
         .ref('messages/$conversationId/$messageId')
         .update({'status': 'read'});
+  }
+
+  @override
+  Future<void> markMessagesAsRead({
+    required String conversationId,
+    required List<String> messageIds,
+  }) async {
+    if (messageIds.isEmpty) return;
+    final Map<String, dynamic> updates = {};
+    for (final id in messageIds) {
+      updates['messages/$conversationId/$id/status'] = 'read';
+    }
+    await database.ref().update(updates);
   }
 
   @override

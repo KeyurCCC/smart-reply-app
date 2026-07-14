@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_reply_app/core/di/injection.dart';
@@ -26,19 +27,40 @@ class _ChatPageState extends State<ChatPage> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   late final ChatBloc _chatBloc;
+  Timer? _typingTimer;
+  bool _isTyping = false;
 
   @override
   void initState() {
     super.initState();
     _chatBloc = getIt<ChatBloc>()..add(LoadChatEvent(widget.conversationId));
+    _controller.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onTextChanged);
+    _typingTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _chatBloc.close();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    final hasText = _controller.text.trim().isNotEmpty;
+    if (hasText && !_isTyping) {
+      _isTyping = true;
+      _chatBloc.add(UpdateTypingStatusEvent(widget.conversationId, true));
+    }
+
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(seconds: 2), () {
+      if (_isTyping) {
+        _isTyping = false;
+        _chatBloc.add(UpdateTypingStatusEvent(widget.conversationId, false));
+      }
+    });
   }
 
   void _sendMessage() {
@@ -52,6 +74,12 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
     _controller.clear();
+
+    _typingTimer?.cancel();
+    if (_isTyping) {
+      _isTyping = false;
+      _chatBloc.add(UpdateTypingStatusEvent(widget.conversationId, false));
+    }
   }
 
   void _scrollToBottom() {
@@ -70,7 +98,28 @@ class _ChatPageState extends State<ChatPage> {
     return BlocProvider.value(
       value: _chatBloc,
       child: Scaffold(
-        appBar: AppBar(title: Text(widget.partnerName)),
+        appBar: AppBar(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.partnerName),
+              BlocBuilder<ChatBloc, ChatState>(
+                builder: (context, state) {
+                  if (state is ChatLoaded && state.partnerTyping) {
+                    return Text(
+                      'typing...',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.teal,
+                            fontStyle: FontStyle.italic,
+                          ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
+          ),
+        ),
         body: Column(
           children: [
             Expanded(
@@ -103,6 +152,7 @@ class _ChatPageState extends State<ChatPage> {
                         text: message.text,
                         isMine: message.senderId == currentUserId,
                         createdAt: message.createdAt,
+                        status: message.status,
                       );
                     },
                   );

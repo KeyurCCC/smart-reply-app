@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:smart_reply_app/core/enums/message_status.dart';
 
 class MessageBubble extends StatelessWidget {
   final String text;
   final bool isMine;
   final DateTime createdAt;
+  final MessageStatus status;
 
   const MessageBubble({
     super.key,
     required this.text,
     required this.isMine,
     required this.createdAt,
+    required this.status,
   });
 
   @override
@@ -47,18 +50,54 @@ class MessageBubble extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              time,
-              style: TextStyle(
-                fontSize: 11,
-                color: isMine
-                    ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8)
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  time,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isMine
+                        ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8)
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (isMine) ...[
+                  const SizedBox(width: 4),
+                  _buildStatusIcon(context),
+                ],
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildStatusIcon(BuildContext context) {
+    IconData iconData;
+    Color color;
+
+    switch (status) {
+      case MessageStatus.sending:
+        iconData = Icons.access_time;
+        color = Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.6);
+      case MessageStatus.sent:
+      case MessageStatus.delivered:
+        iconData = Icons.check;
+        color = Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8);
+      case MessageStatus.read:
+        iconData = Icons.done_all;
+        color = Colors.cyanAccent;
+      case MessageStatus.failed:
+        iconData = Icons.error_outline;
+        color = Theme.of(context).colorScheme.errorContainer;
+    }
+
+    return Icon(
+      iconData,
+      size: 14,
+      color: color,
     );
   }
 }

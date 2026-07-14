@@ -26,6 +26,18 @@ abstract class ChatRepository {
 
   Future<void> markConversationRead(String conversationId);
 
+  Future<void> updateTypingStatus({
+    required String conversationId,
+    required bool typing,
+  });
+
+  Stream<bool> listenTypingStatus({
+    required String conversationId,
+    required String partnerId,
+  });
+
+  Future<void> markMessagesAsRead(String conversationId, List<String> messageIds);
+
   Future<void> ensureAuthReady();
 
   Future<void> ensureConversationReady(String conversationId);

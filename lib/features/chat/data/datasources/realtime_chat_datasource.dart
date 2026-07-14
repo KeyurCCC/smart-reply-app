@@ -30,12 +30,23 @@ abstract class RealtimeChatDatasource {
 
   Future<void> updateTypingStatus({
     required String conversationId,
+    required String userId,
     required bool typing,
+  });
+
+  Stream<bool> listenTypingStatus({
+    required String conversationId,
+    required String partnerId,
   });
 
   Future<void> markMessageRead({
     required String conversationId,
     required String messageId,
+  });
+
+  Future<void> markMessagesAsRead({
+    required String conversationId,
+    required List<String> messageIds,
   });
 
   Future<void> resetUnreadCount({

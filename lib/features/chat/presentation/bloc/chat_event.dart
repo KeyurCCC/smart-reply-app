@@ -43,3 +43,16 @@ class DeleteMessageEvent extends ChatEvent {
     required this.messageId,
   });
 }
+
+class UpdateTypingStatusEvent extends ChatEvent {
+  final String conversationId;
+  final bool typing;
+
+  UpdateTypingStatusEvent(this.conversationId, this.typing);
+}
+
+class ReceiveTypingStatusEvent extends ChatEvent {
+  final bool isTyping;
+
+  ReceiveTypingStatusEvent(this.isTyping);
+}
