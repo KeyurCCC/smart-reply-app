@@ -1,9 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 import '../models/chat_message_model.dart';
 import '../models/conversation_model.dart';
 
-abstract class FirestoreChatDatasource {
+abstract class RealtimeChatDatasource {
   Stream<List<ConversationModel>> listenConversations(String userId);
 
   Stream<List<ChatMessageModel>> listenMessages(String conversationId);
@@ -46,9 +44,7 @@ abstract class FirestoreChatDatasource {
     required List<String> participants,
   });
 
-  Future<DocumentSnapshot<Map<String, dynamic>>> getConversation(
-    String conversationId,
-  );
+  Future<Map<String, dynamic>?> getConversation(String conversationId);
 
   Future<void> ensureConversationSetup({
     required String conversationId,

@@ -1,13 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:get_it/get_it.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_reply_app/features/auth/data/repository/auth_repository_impl.dart';
 import 'package:smart_reply_app/features/auth/domain/repository/auth_repository.dart';
-import 'package:smart_reply_app/features/chat/data/datasources/firestore_chat_datasource.dart';
+import 'package:smart_reply_app/features/chat/data/datasources/realtime_chat_datasource.dart';
 import 'package:smart_reply_app/features/chat/data/repository/chat_repository_impl.dart';
-import 'package:smart_reply_app/features/chat/data/repository/firestore_chat_datasource_impl.dart';
+import 'package:smart_reply_app/features/chat/data/repository/realtime_chat_datasource_impl.dart';
 import 'package:smart_reply_app/features/chat/data/services/llm_smart_reply_service.dart';
 import 'package:smart_reply_app/features/chat/data/services/smart_reply_coordinator.dart';
 import 'package:smart_reply_app/features/chat/data/services/smart_reply_service.dart';
@@ -17,7 +17,7 @@ import 'package:smart_reply_app/features/chat/presentation/bloc/chat_bloc.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/conversations_bloc.dart';
 import 'package:smart_reply_app/features/settings/data/repository/settings_repository_impl.dart';
 import 'package:smart_reply_app/features/settings/domain/repository/settings_repository.dart';
-import 'package:smart_reply_app/features/users/data/datasources/firestore_user_datasource.dart';
+import 'package:smart_reply_app/features/users/data/datasources/realtime_user_datasource.dart';
 import 'package:smart_reply_app/features/users/data/repository/user_repository_impl.dart';
 import 'package:smart_reply_app/features/users/domain/repository/user_repository.dart';
 
@@ -26,7 +26,7 @@ final getIt = GetIt.instance;
 Future<void> configureDependencies() async {
   final sharedPreferences = await SharedPreferences.getInstance();
 
-  getIt.registerLazySingleton<FirebaseFirestore>(() => FirebaseFirestore.instance);
+  getIt.registerLazySingleton<FirebaseDatabase>(() => FirebaseDatabase.instance);
   getIt.registerLazySingleton<FirebaseAuth>(() => FirebaseAuth.instance);
   getIt.registerLazySingleton<GoogleSignIn>(() => GoogleSignIn());
   getIt.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
@@ -35,8 +35,8 @@ Future<void> configureDependencies() async {
     () => SettingsRepositoryImpl(getIt()),
   );
 
-  getIt.registerLazySingleton<FirestoreUserDatasource>(
-    () => FirestoreUserDatasourceImpl(firestore: getIt()),
+  getIt.registerLazySingleton<RealtimeUserDatasource>(
+    () => RealtimeUserDatasourceImpl(database: getIt()),
   );
   getIt.registerLazySingleton<UserRepository>(
     () => UserRepositoryImpl(datasource: getIt()),
@@ -50,9 +50,9 @@ Future<void> configureDependencies() async {
     ),
   );
 
-  getIt.registerLazySingleton<FirestoreChatDatasource>(
-    () => FirestoreChatDatasourceImpl(
-      firestore: getIt(),
+  getIt.registerLazySingleton<RealtimeChatDatasource>(
+    () => RealtimeChatDatasourceImpl(
+      database: getIt(),
       firebaseAuth: getIt(),
     ),
   );

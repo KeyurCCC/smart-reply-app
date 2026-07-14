@@ -3,7 +3,7 @@ import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/core/result/result.dart';
 import 'package:smart_reply_app/core/utils/conversation_id.dart';
 import 'package:smart_reply_app/features/auth/domain/repository/auth_repository.dart';
-import 'package:smart_reply_app/features/chat/data/datasources/firestore_chat_datasource.dart';
+import 'package:smart_reply_app/features/chat/data/datasources/realtime_chat_datasource.dart';
 import 'package:smart_reply_app/features/chat/data/models/chat_message_model.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/smart_reply_result.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
@@ -15,7 +15,7 @@ import 'package:smart_reply_app/features/users/domain/repository/user_repository
 import 'package:uuid/uuid.dart';
 
 class ChatRepositoryImpl implements ChatRepository {
-  final FirestoreChatDatasource datasource;
+  final RealtimeChatDatasource datasource;
   final AuthRepository authRepository;
   final UserRepository userRepository;
   final SmartReplyProvider smartReplyProvider;
@@ -116,14 +116,14 @@ class ChatRepositoryImpl implements ChatRepository {
     }
   }
 
-  /// Resolves participants from Firestore, falling back to parsing the
+  /// Resolves participants from Realtime Database, falling back to parsing the
   /// deterministic conversationId when the doc is missing or unreadable.
   Future<List<String>> _participantsFor(String conversationId) async {
     final userId = _currentUserId;
     try {
       final conversationDoc = await datasource.getConversation(conversationId);
       final fromDoc =
-          (conversationDoc.data()?['participants'] as List<dynamic>?)
+          (conversationDoc?['participants'] as List<dynamic>?)
               ?.cast<String>() ??
           [];
       if (fromDoc.length >= 2) return fromDoc;
@@ -154,19 +154,6 @@ class ChatRepositoryImpl implements ChatRepository {
     final trimmed = message.trim();
     if (trimmed.isEmpty) return;
 
-    final participants = await _participantsFor(conversationId);
-    if (participants.length < 2) {
-      throw StateError(
-        'Cannot send message: participants unresolved for $conversationId',
-      );
-    }
-
-    // Ensure conversation doc exists with participants before any write.
-    await datasource.ensureConversationSetup(
-      conversationId: conversationId,
-      participants: participants,
-    );
-
     final chatMessage = ChatMessageModel(
       id: uuid.v4(),
       senderId: userId,
@@ -179,28 +166,6 @@ class ChatRepositoryImpl implements ChatRepository {
     await datasource.sendMessage(
       conversationId: conversationId,
       message: chatMessage,
-    );
-
-    final conversationDoc = await datasource.getConversation(conversationId);
-    final data = conversationDoc.data();
-    final unreadCount = <String, int>{};
-    for (final participant in participants) {
-      if (participant == userId) {
-        unreadCount[participant] = 0;
-      } else {
-        final current =
-            (data?['unreadCount'] as Map<String, dynamic>?)?[participant]
-                as int? ??
-            0;
-        unreadCount[participant] = current + 1;
-      }
-    }
-
-    await datasource.updateConversation(
-      conversationId: conversationId,
-      lastMessage: trimmed,
-      unreadCount: unreadCount,
-      participants: participants,
     );
   }
 

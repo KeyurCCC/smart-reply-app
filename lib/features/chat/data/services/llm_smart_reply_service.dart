@@ -9,61 +9,39 @@ import 'package:smart_reply_app/features/chat/domain/services/smart_reply_provid
 import 'package:smart_reply_app/features/settings/domain/repository/settings_repository.dart';
 
 class LlmSmartReplyService implements SmartReplyProvider {
-  static const _models = [
-    'gemini-2.0-flash',
-    'gemini-2.5-flash',
-    'gemini-1.5-flash',
-  ];
+  static const _models = ['gemini-3.1-flash-lite-preview'];
 
   final FirebaseFunctions functions;
   final SettingsRepository settingsRepository;
 
-  LlmSmartReplyService({
-    FirebaseFunctions? functions,
-    required this.settingsRepository,
-  }) : functions = functions ?? FirebaseFunctions.instance;
+  LlmSmartReplyService({FirebaseFunctions? functions, required this.settingsRepository})
+    : functions = functions ?? FirebaseFunctions.instance;
 
   @override
-  Future<SmartReplyResult> generateReplies({
-    required List<ChatMessage> messages,
-    required String currentUserId,
-  }) async {
+  Future<SmartReplyResult> generateReplies({required List<ChatMessage> messages, required String currentUserId}) async {
     if (messages.isEmpty) return const SmartReplyResult();
 
-    final recent = messages.length > 10
-        ? messages.sublist(messages.length - 10)
-        : messages;
+    final recent = messages.length > 10 ? messages.sublist(messages.length - 10) : messages;
 
     final apiKey = await settingsRepository.getGeminiApiKey();
     if (apiKey != null && apiKey.isNotEmpty) {
-      final direct = await _generateViaDirectGemini(
-        recent: recent,
-        currentUserId: currentUserId,
-        apiKey: apiKey,
-      );
+      final direct = await _generateViaDirectGemini(recent: recent, currentUserId: currentUserId, apiKey: apiKey);
       if (direct.replies.isNotEmpty) return direct;
       if (direct.error != null) {
         debugPrint('[Gemini] Direct API failed: ${direct.error}');
       }
     }
 
-    final fromFunction = await _generateViaCloudFunction(
-      recent: recent,
-      currentUserId: currentUserId,
-    );
+    final fromFunction = await _generateViaCloudFunction(recent: recent, currentUserId: currentUserId);
     if (fromFunction.replies.isNotEmpty) return fromFunction;
 
     if (apiKey == null || apiKey.isEmpty) {
-      return const SmartReplyResult(
-        error:
-            'Add your Gemini API key in Settings, or deploy Cloud Functions.',
-      );
+      return const SmartReplyResult(error: 'Add your Gemini API key in Settings, or deploy Cloud Functions.');
     }
 
     return SmartReplyResult(
       replies: fromFunction.replies,
-      error: fromFunction.error ??
-          'Gemini returned no suggestions. Check your API key and network.',
+      error: fromFunction.error ?? 'Gemini returned no suggestions. Check your API key and network.',
     );
   }
 
@@ -77,14 +55,7 @@ class LlmSmartReplyService implements SmartReplyProvider {
         options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
       );
       final result = await callable.call<Map<String, dynamic>>({
-        'messages': recent
-            .map(
-              (message) => {
-                'text': message.text,
-                'senderId': message.senderId,
-              },
-            )
-            .toList(),
+        'messages': recent.map((message) => {'text': message.text, 'senderId': message.senderId}).toList(),
         'currentUserId': currentUserId,
       });
 
@@ -92,14 +63,10 @@ class LlmSmartReplyService implements SmartReplyProvider {
       if (replies.isNotEmpty) {
         return SmartReplyResult(replies: replies);
       }
-      return const SmartReplyResult(
-        error: 'Cloud Function returned no suggestions.',
-      );
+      return const SmartReplyResult(error: 'Cloud Function returned no suggestions.');
     } on FirebaseFunctionsException catch (e) {
       debugPrint('[Gemini] Cloud Function error: ${e.code} ${e.message}');
-      return SmartReplyResult(
-        error: 'Cloud Function unavailable (${e.code}). Using direct API.',
-      );
+      return SmartReplyResult(error: 'Cloud Function unavailable (${e.code}). Using direct API.');
     } catch (e) {
       debugPrint('[Gemini] Cloud Function error: $e');
       return SmartReplyResult(error: 'Cloud Function failed: $e');
@@ -116,14 +83,9 @@ class LlmSmartReplyService implements SmartReplyProvider {
 
     for (final modelName in _models) {
       try {
-        final model = GenerativeModel(
-          model: modelName,
-          apiKey: apiKey,
-        );
+        final model = GenerativeModel(model: modelName, apiKey: apiKey);
 
-        final response = await model.generateContent([
-          Content.text(prompt),
-        ]);
+        final response = await model.generateContent([Content.text(prompt)]);
 
         final replies = _parseRepliesFromText(response.text ?? '');
         if (replies.isNotEmpty) {
@@ -136,9 +98,7 @@ class LlmSmartReplyService implements SmartReplyProvider {
       }
     }
 
-    return SmartReplyResult(
-      error: lastError?.toString() ?? 'Gemini returned an empty response.',
-    );
+    return SmartReplyResult(error: lastError?.toString() ?? 'Gemini returned an empty response.');
   }
 
   String _buildPrompt(List<ChatMessage> messages, String currentUserId) {
@@ -149,16 +109,61 @@ class LlmSmartReplyService implements SmartReplyProvider {
         })
         .join('\n');
 
-    return '''You suggest short tap-to-send reply options for a casual 1:1 chat app.
-You are NOT a chatbot. Do not continue the conversation yourself.
-Return exactly 3 brief reply options the local user ("Me") could send next.
-Keep each reply under 80 characters. Match the tone of the chat.
+    return '''
+You generate Smart Reply suggestions for a messaging app.
+
+Your job is NOT to continue the conversation as an AI assistant.
+Your job is ONLY to suggest replies that the user ("Me") could realistically send next.
+
+Rules:
+
+- Return EXACTLY 3 replies.
+- Every reply must be different in intention.
+- Avoid repeating the same wording.
+- Keep each reply under 80 characters.
+- Sound like a real person texting.
+- Match the conversation's tone.
+- Never explain anything.
+- Never add numbering.
+- Never use markdown.
+
+Try to make the three replies represent different styles such as:
+
+• Friendly / warm
+• Curious / asking a follow-up
+• Playful / humorous (when appropriate)
+• Supportive
+• Short acknowledgement
+• Enthusiastic
+• Thoughtful
+• Agreeing
+• Suggesting something
+• Politely declining
+• Flirty (ONLY if the conversation already has that tone)
+
+If appropriate, make one reply very short (1–3 words), one medium, and one more conversational.
+
+Avoid generic replies like:
+- Okay
+- Nice
+- Cool
+- Thanks
+
+unless they genuinely fit the conversation.
 
 Conversation:
 $transcript
 
-Respond with JSON only, no markdown:
-{"replies":["reply1","reply2","reply3"]}''';
+Return JSON ONLY:
+
+{
+  "replies": [
+    "...",
+    "...",
+    "..."
+  ]
+}
+''';
   }
 
   List<String> _parseReplies(dynamic replies) {

@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class ConversationModel {
   final String id;
   final List<String> participantIds;
@@ -30,12 +28,20 @@ class ConversationModel {
       });
     }
 
+    final updatedVal = json['updatedAt'];
+    DateTime updatedAt;
+    if (updatedVal is int) {
+      updatedAt = DateTime.fromMillisecondsSinceEpoch(updatedVal);
+    } else {
+      updatedAt = DateTime.now();
+    }
+
     return ConversationModel(
       id: json['id'] as String? ?? '',
       participantIds:
           (json['participants'] as List<dynamic>?)?.cast<String>() ?? [],
       lastMessage: json['lastMessage'] as String? ?? '',
-      updatedAt: (json['updatedAt'] as Timestamp).toDate(),
+      updatedAt: updatedAt,
       typing: json['typing'] as bool? ?? false,
       unreadCountMap: unreadMap,
     );

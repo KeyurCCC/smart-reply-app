@@ -1,9 +1,9 @@
-import 'package:smart_reply_app/features/users/data/datasources/firestore_user_datasource.dart';
+import 'package:smart_reply_app/features/users/data/datasources/realtime_user_datasource.dart';
 import 'package:smart_reply_app/features/users/domain/entities/app_user.dart';
 import 'package:smart_reply_app/features/users/domain/repository/user_repository.dart';
 
 class UserRepositoryImpl implements UserRepository {
-  final FirestoreUserDatasource datasource;
+  final RealtimeUserDatasource datasource;
 
   UserRepositoryImpl({required this.datasource});
 

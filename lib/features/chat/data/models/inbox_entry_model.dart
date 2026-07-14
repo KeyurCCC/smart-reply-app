@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'conversation_model.dart';
 
 class InboxEntryModel {
@@ -18,11 +16,19 @@ class InboxEntryModel {
   });
 
   factory InboxEntryModel.fromMap(String id, Map<String, dynamic> json) {
+    final updatedVal = json['updatedAt'];
+    DateTime updatedAt;
+    if (updatedVal is int) {
+      updatedAt = DateTime.fromMillisecondsSinceEpoch(updatedVal);
+    } else {
+      updatedAt = DateTime.now();
+    }
+
     return InboxEntryModel(
       conversationId: json['conversationId'] as String? ?? id,
       partnerId: json['partnerId'] as String? ?? '',
       lastMessage: json['lastMessage'] as String? ?? '',
-      updatedAt: (json['updatedAt'] as Timestamp).toDate(),
+      updatedAt: updatedAt,
       unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
     );
   }

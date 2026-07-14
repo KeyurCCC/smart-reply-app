@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smart_reply_app/core/enums/message_status.dart';
 import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
@@ -14,13 +13,21 @@ class ChatMessageModel extends ChatMessage {
   });
 
   factory ChatMessageModel.fromMap(Map<String, dynamic> json) {
+    final createdVal = json['createdAt'];
+    DateTime createdAt;
+    if (createdVal is int) {
+      createdAt = DateTime.fromMillisecondsSinceEpoch(createdVal);
+    } else {
+      createdAt = DateTime.now();
+    }
+
     return ChatMessageModel(
       id: json['id'] as String,
       senderId: json['senderId'] as String,
       text: json['text'] as String,
       type: MessageType.values.firstWhere((e) => e.name == json['type']),
       status: MessageStatus.values.firstWhere((e) => e.name == json['status']),
-      createdAt: (json['createdAt'] as Timestamp).toDate(),
+      createdAt: createdAt,
     );
   }
 
@@ -31,7 +38,7 @@ class ChatMessageModel extends ChatMessage {
       'text': text,
       'type': type.name,
       'status': status.name,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt.millisecondsSinceEpoch,
     };
   }
 }
