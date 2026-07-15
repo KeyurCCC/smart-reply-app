@@ -4,12 +4,14 @@ class MessageInputBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final bool enabled;
+  final VoidCallback? onAttachPressed;
 
   const MessageInputBar({
     super.key,
     required this.controller,
     required this.onSend,
     this.enabled = true,
+    this.onAttachPressed,
   });
 
   @override
@@ -19,6 +21,13 @@ class MessageInputBar extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         child: Row(
           children: [
+            if (onAttachPressed != null) ...[
+              IconButton(
+                onPressed: enabled ? onAttachPressed : null,
+                icon: const Icon(Icons.attach_file),
+              ),
+              const SizedBox(width: 4),
+            ],
             Expanded(
               child: TextField(
                 controller: controller,

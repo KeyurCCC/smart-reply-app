@@ -1,3 +1,4 @@
+import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 
 abstract class ChatEvent {}
@@ -55,4 +56,20 @@ class ReceiveTypingStatusEvent extends ChatEvent {
   final bool isTyping;
 
   ReceiveTypingStatusEvent(this.isTyping);
+}
+
+class SendMediaMessageEvent extends ChatEvent {
+  final String conversationId;
+  final String localPath;
+  final MessageType type;
+  final String fileName;
+  final int fileSize;
+
+  SendMediaMessageEvent({
+    required this.conversationId,
+    required this.localPath,
+    required this.type,
+    required this.fileName,
+    required this.fileSize,
+  });
 }

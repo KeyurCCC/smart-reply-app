@@ -1,3 +1,4 @@
+import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/core/result/result.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/smart_reply_result.dart';
@@ -37,6 +38,19 @@ abstract class ChatRepository {
   });
 
   Future<void> markMessagesAsRead(String conversationId, List<String> messageIds);
+
+  Future<Result<String>> uploadFile({
+    required String localPath,
+    required String remotePath,
+  });
+
+  Future<void> sendMediaMessage({
+    required String conversationId,
+    required String mediaUrl,
+    required MessageType type,
+    String? fileName,
+    int? fileSize,
+  });
 
   Future<void> ensureAuthReady();
 

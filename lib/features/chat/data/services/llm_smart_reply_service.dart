@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/smart_reply_result.dart';
 import 'package:smart_reply_app/features/chat/domain/services/smart_reply_provider.dart';
@@ -79,13 +81,29 @@ class LlmSmartReplyService implements SmartReplyProvider {
     required String apiKey,
   }) async {
     final prompt = _buildPrompt(recent, currentUserId);
-    Object? lastError;
 
+    final parts = <Part>[TextPart(prompt)];
+    for (final msg in recent) {
+      if (msg.type == MessageType.image && msg.text.startsWith('http')) {
+        final bytes = await _downloadImageBytes(msg.text);
+        if (bytes != null) {
+          final lowercaseUrl = msg.text.toLowerCase();
+          final mimeType = lowercaseUrl.contains('.png')
+              ? 'image/png'
+              : lowercaseUrl.contains('.webp')
+                  ? 'image/webp'
+                  : 'image/jpeg';
+          parts.add(DataPart(mimeType, bytes));
+        }
+      }
+    }
+
+    Object? lastError;
     for (final modelName in _models) {
       try {
         final model = GenerativeModel(model: modelName, apiKey: apiKey);
 
-        final response = await model.generateContent([Content.text(prompt)]);
+        final response = await model.generateContent([Content.multi(parts)]);
 
         final replies = _parseRepliesFromText(response.text ?? '');
         if (replies.isNotEmpty) {
@@ -105,7 +123,10 @@ class LlmSmartReplyService implements SmartReplyProvider {
     final transcript = messages
         .map((message) {
           final role = message.senderId == currentUserId ? 'Me' : 'Them';
-          return '$role: ${message.text}';
+          final contentText = message.type == MessageType.text
+              ? message.text
+              : '[${message.type.name} attachment]';
+          return '$role: $contentText';
         })
         .join('\n');
 
@@ -198,5 +219,20 @@ Return JSON ONLY:
     } catch (_) {
       return [];
     }
+  }
+
+  Future<Uint8List?> _downloadImageBytes(String url) async {
+    try {
+      final client = HttpClient();
+      final request = await client.getUrl(Uri.parse(url));
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        final bytes = await consolidateHttpClientResponseBytes(response);
+        return bytes;
+      }
+    } catch (e) {
+      debugPrint('[Gemini] Failed to download image bytes: $e');
+    }
+    return null;
   }
 }

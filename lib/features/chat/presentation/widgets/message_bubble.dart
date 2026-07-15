@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:smart_reply_app/core/enums/message_status.dart';
+import 'package:smart_reply_app/core/enums/message_type.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MessageBubble extends StatelessWidget {
   final String text;
   final bool isMine;
   final DateTime createdAt;
   final MessageStatus status;
+  final MessageType type;
+  final String? fileName;
+  final int? fileSize;
 
   const MessageBubble({
     super.key,
@@ -14,6 +19,9 @@ class MessageBubble extends StatelessWidget {
     required this.isMine,
     required this.createdAt,
     required this.status,
+    this.type = MessageType.text,
+    this.fileName,
+    this.fileSize,
   });
 
   @override
@@ -41,14 +49,7 @@ class MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
-              text,
-              style: TextStyle(
-                color: isMine
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
+            _buildMessageContent(context),
             const SizedBox(height: 4),
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -72,6 +73,133 @@ class MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildMessageContent(BuildContext context) {
+    if (type == MessageType.image) {
+      return _buildImageContent(context);
+    } else if (type == MessageType.file) {
+      return _buildFileContent(context);
+    } else {
+      return Text(
+        text,
+        style: TextStyle(
+          color: isMine
+              ? Theme.of(context).colorScheme.onPrimary
+              : Theme.of(context).colorScheme.onSurface,
+        ),
+      );
+    }
+  }
+
+  Widget _buildImageContent(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: GestureDetector(
+        onTap: () => _launchURL(text),
+        child: Image.network(
+          text,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              width: 200,
+              height: 200,
+              color: Colors.black12,
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              width: 200,
+              height: 200,
+              color: Colors.black12,
+              child: const Icon(Icons.broken_image, size: 40),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileContent(BuildContext context) {
+    final textColor = isMine
+        ? Theme.of(context).colorScheme.onPrimary
+        : Theme.of(context).colorScheme.onSurface;
+    final iconColor = isMine
+        ? Theme.of(context).colorScheme.onPrimary
+        : Theme.of(context).colorScheme.primary;
+    final sizeText = fileSize != null ? _formatBytes(fileSize!) : '';
+
+    return InkWell(
+      onTap: () => _launchURL(text),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.black12,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.insert_drive_file, color: iconColor, size: 36),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    fileName ?? 'Attachment',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (sizeText.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      sizeText,
+                      style: TextStyle(
+                        color: textColor.withValues(alpha: 0.7),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.open_in_new, color: textColor.withValues(alpha: 0.7), size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return "0 B";
+    const suffixes = ["B", "KB", "MB", "GB", "TB"];
+    var i = (bytes.bitLength / 10).floor();
+    if (i >= suffixes.length) i = suffixes.length - 1;
+    var temp = bytes / (1 << (i * 10));
+    return "${temp.toStringAsFixed(1)} ${suffixes[i]}";
+  }
+
+  Future<void> _launchURL(String urlString) async {
+    try {
+      final uri = Uri.parse(urlString);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('[MessageBubble] Could not launch URL: $e');
+    }
   }
 
   Widget _buildStatusIcon(BuildContext context) {

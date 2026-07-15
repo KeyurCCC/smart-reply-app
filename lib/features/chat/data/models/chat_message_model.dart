@@ -10,6 +10,8 @@ class ChatMessageModel extends ChatMessage {
     required super.type,
     required super.status,
     required super.createdAt,
+    super.fileName,
+    super.fileSize,
   });
 
   factory ChatMessageModel.fromMap(Map<String, dynamic> json) {
@@ -28,6 +30,8 @@ class ChatMessageModel extends ChatMessage {
       type: MessageType.values.firstWhere((e) => e.name == json['type']),
       status: MessageStatus.values.firstWhere((e) => e.name == json['status']),
       createdAt: createdAt,
+      fileName: json['fileName'] as String?,
+      fileSize: json['fileSize'] as int?,
     );
   }
 
@@ -39,6 +43,8 @@ class ChatMessageModel extends ChatMessage {
       'type': type.name,
       'status': status.name,
       'createdAt': createdAt.millisecondsSinceEpoch,
+      if (fileName != null) 'fileName': fileName,
+      if (fileSize != null) 'fileSize': fileSize,
     };
   }
 }

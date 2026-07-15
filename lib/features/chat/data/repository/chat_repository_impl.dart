@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:smart_reply_app/core/enums/message_status.dart';
 import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/core/result/result.dart';
@@ -261,6 +263,52 @@ class ChatRepositoryImpl implements ChatRepository {
     return datasource.markMessagesAsRead(
       conversationId: conversationId,
       messageIds: messageIds,
+    );
+  }
+
+  @override
+  Future<Result<String>> uploadFile({
+    required String localPath,
+    required String remotePath,
+  }) async {
+    try {
+      final ref = FirebaseStorage.instance.ref().child(remotePath);
+      final uploadTask = ref.putFile(File(localPath));
+      final snapshot = await uploadTask;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      return Success(downloadUrl);
+    } catch (e) {
+      return Failure(e.toString());
+    }
+  }
+
+  @override
+  Future<void> sendMediaMessage({
+    required String conversationId,
+    required String mediaUrl,
+    required MessageType type,
+    String? fileName,
+    int? fileSize,
+  }) async {
+    final userId = _currentUserId;
+    if (userId == null) {
+      throw Exception('Not signed in');
+    }
+
+    final chatMessage = ChatMessageModel(
+      id: uuid.v4(),
+      senderId: userId,
+      text: mediaUrl,
+      type: type,
+      status: MessageStatus.sent,
+      createdAt: DateTime.now(),
+      fileName: fileName,
+      fileSize: fileSize,
+    );
+
+    await datasource.sendMessage(
+      conversationId: conversationId,
+      message: chatMessage,
     );
   }
 }

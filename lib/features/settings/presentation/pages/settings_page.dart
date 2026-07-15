@@ -54,9 +54,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await _settingsRepository.setGeminiApiKey(_apiKeyController.text);
     if (!mounted) return;
     setState(() => _testResult = null);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Gemini API key saved on this device')),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gemini API key saved on this device')));
   }
 
   Future<void> _testApiKey() async {
@@ -72,20 +70,15 @@ class _SettingsPageState extends State<SettingsPage> {
     });
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-2.0-flash',
-        apiKey: apiKey,
-      );
-      final response = await model.generateContent([
-        Content.text('Reply with exactly: OK'),
-      ]);
+      final model = GenerativeModel(model: 'gemini-3.1-flash-lite', apiKey: apiKey);
+      final response = await model.generateContent([Content.text('Reply with exactly: OK')]);
+      final response = await model.generateContent([Content.text('Reply with exactly: OK')]);
       final text = response.text?.trim() ?? '';
       if (!mounted) return;
       setState(() {
-        _testResult = text.isNotEmpty
-            ? 'API key works.'
-            : 'API responded but returned empty text.';
+        _testResult = text.isNotEmpty ? 'API key works.' : 'API responded but returned empty text.';
       });
+    } catch (e) {
     } catch (e) {
       if (!mounted) return;
       setState(() => _testResult = 'Test failed: $e');
@@ -104,10 +97,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Text(
-                    'Smart reply engine',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  child: Text('Smart reply engine', style: Theme.of(context).textTheme.titleMedium),
                 ),
                 RadioListTile<SmartReplyMode>(
                   title: const Text('On-device (ML Kit)'),
@@ -133,10 +123,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const Divider(height: 32),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text(
-                    'Gemini API key (device only)',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  child: Text('Gemini API key (device only)', style: Theme.of(context).textTheme.titleMedium),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -158,11 +145,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         onPressed: () {
                           setState(() => _obscureApiKey = !_obscureApiKey);
                         },
-                        icon: Icon(
-                          _obscureApiKey
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                        ),
+                        icon: Icon(_obscureApiKey ? Icons.visibility : Icons.visibility_off),
                       ),
                     ),
                   ),
@@ -172,23 +155,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: FilledButton(
-                          onPressed: _saveApiKey,
-                          child: const Text('Save API key'),
-                        ),
+                        child: FilledButton(onPressed: _saveApiKey, child: const Text('Save API key')),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton(
                           onPressed: _testingKey ? null : _testApiKey,
                           child: _testingKey
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                               : const Text('Test key'),
                         ),
                       ),
@@ -201,10 +175,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: Text(
                       _testResult!,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: _testResult == 'API key works.'
-                                ? Colors.green
-                                : Theme.of(context).colorScheme.error,
-                          ),
+                        color: _testResult == 'API key works.' ? Colors.green : Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   )
                 else

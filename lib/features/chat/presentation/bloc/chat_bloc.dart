@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_reply_app/core/enums/message_status.dart';
+import 'package:smart_reply_app/core/result/result.dart';
 import 'package:smart_reply_app/core/utils/conversation_id.dart';
+import 'package:uuid/uuid.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 import 'package:smart_reply_app/features/chat/domain/repository/chat_repository.dart';
 
@@ -30,6 +32,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ReconnectChatEvent>(_reconnectChat);
     on<UpdateTypingStatusEvent>(_updateTypingStatus);
     on<ReceiveTypingStatusEvent>(_receiveTypingStatus);
+    on<SendMediaMessageEvent>(_sendMediaMessage);
   }
 
   @override
@@ -278,6 +281,37 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           partnerTyping: event.isTyping,
         ),
       );
+    }
+  }
+
+  Future<void> _sendMediaMessage(
+    SendMediaMessageEvent event,
+    Emitter<ChatState> emit,
+  ) async {
+    try {
+      _safeAdd(ClearSmartRepliesEvent());
+      final uuidStr = const Uuid().v4();
+      final remotePath = 'chat_attachments/${event.conversationId}/${uuidStr}_${event.fileName}';
+
+      final uploadResult = await repository.uploadFile(
+        localPath: event.localPath,
+        remotePath: remotePath,
+      );
+
+      switch (uploadResult) {
+        case Success(data: final mediaUrl):
+          await repository.sendMediaMessage(
+            conversationId: event.conversationId,
+            mediaUrl: mediaUrl,
+            type: event.type,
+            fileName: event.fileName,
+            fileSize: event.fileSize,
+          );
+        case Failure(message: final error):
+          emit(ChatError('Failed to upload attachment: $error'));
+      }
+    } catch (e) {
+      emit(ChatError('Failed to send media message: $e'));
     }
   }
 }

@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/core/di/injection.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/chat_bloc.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/chat_event.dart';
@@ -102,6 +106,92 @@ class _ChatPageState extends State<ChatPage> {
         curve: Curves.easeOut,
       );
     });
+  }
+
+  Future<void> _onAttachPressed() async {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (bottomSheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Photo Gallery'),
+                onTap: () {
+                  Navigator.pop(bottomSheetContext);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Camera'),
+                onTap: () {
+                  Navigator.pop(bottomSheetContext);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.insert_drive_file),
+                title: const Text('Document / File'),
+                onTap: () {
+                  Navigator.pop(bottomSheetContext);
+                  _pickFile();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source);
+      if (picked == null) return;
+
+      final file = File(picked.path);
+      final size = await file.length();
+      final fileName = picked.name;
+
+      _chatBloc.add(
+        SendMediaMessageEvent(
+          conversationId: widget.conversationId,
+          localPath: file.path,
+          type: MessageType.image,
+          fileName: fileName,
+          fileSize: size,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[ChatPage] Error picking image: $e');
+    }
+  }
+
+  Future<void> _pickFile() async {
+    try {
+      final result = await FilePicker.pickFiles();
+      if (result == null || result.files.isEmpty) return;
+
+      final pickedFile = result.files.first;
+      final path = pickedFile.path;
+      if (path == null) return;
+
+      _chatBloc.add(
+        SendMediaMessageEvent(
+          conversationId: widget.conversationId,
+          localPath: path,
+          type: MessageType.file,
+          fileName: pickedFile.name,
+          fileSize: pickedFile.size,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[ChatPage] Error picking file: $e');
+    }
   }
 
   Future<void> _showDeleteMessageDialog(String messageId) async {
@@ -243,6 +333,9 @@ class _ChatPageState extends State<ChatPage> {
                           isMine: isMine,
                           createdAt: message.createdAt,
                           status: message.status,
+                          type: message.type,
+                          fileName: message.fileName,
+                          fileSize: message.fileSize,
                         ),
                       );
                     },
@@ -293,6 +386,7 @@ class _ChatPageState extends State<ChatPage> {
             MessageInputBar(
               controller: _controller,
               onSend: _sendMessage,
+              onAttachPressed: _onAttachPressed,
             ),
           ],
         ),

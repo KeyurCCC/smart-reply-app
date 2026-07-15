@@ -8,6 +8,8 @@ class ChatMessage {
   final MessageType type;
   final MessageStatus status;
   final DateTime createdAt;
+  final String? fileName;
+  final int? fileSize;
 
   const ChatMessage({
     required this.id,
@@ -16,6 +18,8 @@ class ChatMessage {
     required this.type,
     required this.status,
     required this.createdAt,
+    this.fileName,
+    this.fileSize,
   });
 
   ChatMessage copyWith({
@@ -25,6 +29,8 @@ class ChatMessage {
     MessageType? type,
     MessageStatus? status,
     DateTime? createdAt,
+    String? fileName,
+    int? fileSize,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -33,6 +39,8 @@ class ChatMessage {
       type: type ?? this.type,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      fileName: fileName ?? this.fileName,
+      fileSize: fileSize ?? this.fileSize,
     );
   }
 }
