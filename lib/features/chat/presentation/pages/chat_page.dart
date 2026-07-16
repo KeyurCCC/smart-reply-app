@@ -1,3 +1,4 @@
+// Trigger analysis reload
 import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
@@ -9,6 +10,9 @@ import 'package:smart_reply_app/core/di/injection.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/chat_bloc.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/chat_event.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/chat_state.dart';
+import 'package:smart_reply_app/features/chat/presentation/bloc/chat_analyzer_bloc.dart';
+import 'package:smart_reply_app/features/chat/presentation/bloc/suggestion_bloc.dart';
+import 'package:smart_reply_app/features/chat/presentation/bloc/smart_action_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:smart_reply_app/core/utils/conversation_id.dart';
 import 'package:smart_reply_app/features/users/domain/entities/app_user.dart';
@@ -17,6 +21,7 @@ import 'package:smart_reply_app/features/chat/presentation/widgets/message_bubbl
 import 'package:smart_reply_app/features/chat/presentation/widgets/message_input_bar.dart';
 import 'package:smart_reply_app/features/chat/presentation/widgets/smart_reply_chips.dart';
 import 'package:smart_reply_app/features/chat/presentation/widgets/typing_indicator.dart';
+import 'package:smart_reply_app/features/chat/presentation/widgets/action_cards_list.dart';
 
 class ChatPage extends StatefulWidget {
   final String conversationId;
@@ -236,159 +241,223 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _chatBloc,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.partnerName),
-              StreamBuilder<AppUser?>(
-                stream: getIt<UserRepository>().listenUser(_getPartnerId()),
-                builder: (context, userSnapshot) {
-                  final user = userSnapshot.data;
-                  return BlocBuilder<ChatBloc, ChatState>(
-                    builder: (context, state) {
-                      if (state is ChatLoaded && state.partnerTyping) {
-                        return Text(
-                          'typing...',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.teal,
-                                fontStyle: FontStyle.italic,
-                              ),
-                        );
-                      }
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: _chatBloc),
+        BlocProvider<SuggestionBloc>(
+          create: (context) => getIt<SuggestionBloc>(),
+        ),
+        BlocProvider<ChatAnalyzerBloc>(
+          create: (context) => getIt<ChatAnalyzerBloc>(),
+        ),
+        BlocProvider<SmartActionBloc>(
+          create: (context) => getIt<SmartActionBloc>(),
+        ),
+      ],
+      child: BlocListener<SmartActionBloc, SmartActionState>(
+        listener: (context, state) {
+          if (state is SmartActionSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          } else if (state is SmartActionFailure) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Action failed: ${state.error}'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.partnerName),
+                StreamBuilder<AppUser?>(
+                  stream: getIt<UserRepository>().listenUser(_getPartnerId()),
+                  builder: (context, userSnapshot) {
+                    final user = userSnapshot.data;
+                    return BlocBuilder<ChatBloc, ChatState>(
+                      builder: (context, state) {
+                        if (state is ChatLoaded && state.partnerTyping) {
+                          return Text(
+                            'typing...',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.teal,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                          );
+                        }
 
-                      if (user == null) {
+                        if (user == null) {
+                          return const SizedBox.shrink();
+                        }
+
+                        if (user.online) {
+                          return Text(
+                            'online',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          );
+                        } else if (user.lastSeen != null) {
+                          final timeString = DateFormat.jm().format(user.lastSeen!);
+                          final dateString = DateFormat.MMMd().format(user.lastSeen!);
+                          return Text(
+                            'last seen $dateString at $timeString',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                          );
+                        }
+
                         return const SizedBox.shrink();
-                      }
-
-                      if (user.online) {
-                        return Text(
-                          'online',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: BlocConsumer<ChatBloc, ChatState>(
+                  listener: (context, state) {
+                    if (state is ChatLoaded) {
+                      _scrollToBottom();
+                      if (state.messages.isNotEmpty) {
+                        final currentUserId = _chatBloc.repository.currentUserId ?? '';
+                        context.read<ChatAnalyzerBloc>().add(
+                              AnalyzeMessagesEvent(
+                                messages: state.messages,
+                                currentUserId: currentUserId,
                               ),
-                        );
-                      } else if (user.lastSeen != null) {
-                        final timeString = DateFormat.jm().format(user.lastSeen!);
-                        final dateString = DateFormat.MMMd().format(user.lastSeen!);
-                        return Text(
-                          'last seen $dateString at $timeString',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                        );
+                            );
+                        final last = state.messages.last;
+                        if (currentUserId.isNotEmpty && last.senderId != currentUserId) {
+                          context.read<SuggestionBloc>().add(
+                                GetSuggestionsEvent(state.messages),
+                              );
+                        } else {
+                          context.read<SuggestionBloc>().add(
+                                ClearSuggestionsEvent(),
+                              );
+                        }
                       }
-
+                    }
+                  },
+                  builder: (context, state) {
+                    if (state is ChatLoading || state is ChatInitial) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (state is ChatError) {
+                      return Center(child: Text(state.message));
+                    }
+                    if (state is! ChatLoaded) {
                       return const SizedBox.shrink();
+                    }
+
+                    final currentUserId = _chatBloc.repository.currentUserId;
+
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      itemCount: state.messages.length + (state.partnerTyping ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (state.partnerTyping && index == state.messages.length) {
+                          return const TypingBubble();
+                        }
+
+                        final message = state.messages[index];
+                        final isMine = message.senderId == currentUserId;
+                        return BlocBuilder<ChatAnalyzerBloc, ChatAnalyzerState>(
+                          builder: (context, analyzerState) {
+                            final entities = analyzerState.messageEntities[message.id] ?? const [];
+                            return Column(
+                              crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onLongPress: isMine
+                                      ? () => _showDeleteMessageDialog(message.id)
+                                      : null,
+                                  child: MessageBubble(
+                                    text: message.text,
+                                    isMine: isMine,
+                                    createdAt: message.createdAt,
+                                    status: message.status,
+                                    type: message.type,
+                                    fileName: message.fileName,
+                                    fileSize: message.fileSize,
+                                  ),
+                                ),
+                                if (entities.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8.0),
+                                    child: ActionCardsList(entities: entities),
+                                  ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              BlocBuilder<SuggestionBloc, SuggestionState>(
+                builder: (context, state) {
+                  if (state is SuggestionLoading) {
+                    return const LinearProgressIndicator(minHeight: 2);
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+              BlocBuilder<SuggestionBloc, SuggestionState>(
+                builder: (context, state) {
+                  if (state is SuggestionLoaded &&
+                      state.error != null &&
+                      state.replies.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                      child: Text(
+                        state.error!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+              BlocBuilder<SuggestionBloc, SuggestionState>(
+                builder: (context, state) {
+                  final replies = state is SuggestionLoaded ? state.replies : const <String>[];
+                  return SmartReplyChips(
+                    replies: replies,
+                    onSelected: (reply) {
+                      _controller.text = reply;
+                      _sendMessage();
                     },
                   );
                 },
+              ),
+              MessageInputBar(
+                controller: _controller,
+                onSend: _sendMessage,
+                onAttachPressed: _onAttachPressed,
               ),
             ],
           ),
-        ),
-        body: Column(
-          children: [
-            Expanded(
-              child: BlocConsumer<ChatBloc, ChatState>(
-                listener: (context, state) {
-                  if (state is ChatLoaded) {
-                    _scrollToBottom();
-                  }
-                },
-                builder: (context, state) {
-                  if (state is ChatLoading || state is ChatInitial) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (state is ChatError) {
-                    return Center(child: Text(state.message));
-                  }
-                  if (state is! ChatLoaded) {
-                    return const SizedBox.shrink();
-                  }
-
-                  final currentUserId = _chatBloc.repository.currentUserId;
-
-                  return ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    itemCount: state.messages.length + (state.partnerTyping ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (state.partnerTyping && index == state.messages.length) {
-                        return const TypingBubble();
-                      }
-
-                      final message = state.messages[index];
-                      final isMine = message.senderId == currentUserId;
-                      return GestureDetector(
-                        onLongPress: isMine
-                            ? () => _showDeleteMessageDialog(message.id)
-                            : null,
-                        child: MessageBubble(
-                          text: message.text,
-                          isMine: isMine,
-                          createdAt: message.createdAt,
-                          status: message.status,
-                          type: message.type,
-                          fileName: message.fileName,
-                          fileSize: message.fileSize,
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-            BlocBuilder<ChatBloc, ChatState>(
-              builder: (context, state) {
-                if (state is ChatLoaded && state.isGeneratingSmartReplies) {
-                  return const LinearProgressIndicator(minHeight: 2);
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-            BlocBuilder<ChatBloc, ChatState>(
-              builder: (context, state) {
-                if (state is ChatLoaded &&
-                    state.smartReplyError != null &&
-                    state.smartReplies.isEmpty &&
-                    !state.isGeneratingSmartReplies) {
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                    child: Text(
-                      state.smartReplyError!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-            BlocBuilder<ChatBloc, ChatState>(
-              builder: (context, state) {
-                final replies =
-                    state is ChatLoaded ? state.smartReplies : const <String>[];
-                return SmartReplyChips(
-                  replies: replies,
-                  onSelected: (reply) {
-                    _controller.text = reply;
-                    _sendMessage();
-                  },
-                );
-              },
-            ),
-            MessageInputBar(
-              controller: _controller,
-              onSend: _sendMessage,
-              onAttachPressed: _onAttachPressed,
-            ),
-          ],
         ),
       ),
     );

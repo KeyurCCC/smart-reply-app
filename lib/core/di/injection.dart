@@ -20,6 +20,13 @@ import 'package:smart_reply_app/features/settings/domain/repository/settings_rep
 import 'package:smart_reply_app/features/users/data/datasources/realtime_user_datasource.dart';
 import 'package:smart_reply_app/features/users/data/repository/user_repository_impl.dart';
 import 'package:smart_reply_app/features/users/domain/repository/user_repository.dart';
+import 'package:smart_reply_app/features/chat/domain/repository/entity_cache_repository.dart';
+import 'package:smart_reply_app/features/chat/data/repository/entity_cache_repository_impl.dart';
+import 'package:smart_reply_app/features/chat/domain/services/chat_analyzer_service.dart';
+import 'package:smart_reply_app/features/chat/data/services/llm_chat_analyzer_service.dart';
+import 'package:smart_reply_app/features/chat/presentation/bloc/chat_analyzer_bloc.dart';
+import 'package:smart_reply_app/features/chat/presentation/bloc/suggestion_bloc.dart';
+import 'package:smart_reply_app/features/chat/presentation/bloc/smart_action_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -71,6 +78,12 @@ Future<void> configureDependencies() async {
       settingsRepository: getIt(),
     ),
   );
+  getIt.registerLazySingleton<EntityCacheRepository>(
+    () => EntityCacheRepositoryImpl(getIt()),
+  );
+  getIt.registerLazySingleton<ChatAnalyzerService>(
+    () => LlmChatAnalyzerService(settingsRepository: getIt()),
+  );
   getIt.registerLazySingleton<ChatRepository>(
     () => ChatRepositoryImpl(
       datasource: getIt(),
@@ -89,5 +102,17 @@ Future<void> configureDependencies() async {
   );
   getIt.registerFactory<ChatBloc>(
     () => ChatBloc(getIt()),
+  );
+  getIt.registerFactory<SuggestionBloc>(
+    () => SuggestionBloc(getIt()),
+  );
+  getIt.registerFactory<ChatAnalyzerBloc>(
+    () => ChatAnalyzerBloc(
+      analyzerService: getIt(),
+      cacheRepository: getIt(),
+    ),
+  );
+  getIt.registerFactory<SmartActionBloc>(
+    () => SmartActionBloc(),
   );
 }
