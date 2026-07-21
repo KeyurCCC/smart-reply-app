@@ -82,11 +82,12 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Stream<List<ChatMessage>> listenMessages(String conversationId) async* {
-    await authRepository.ensureAuthReady();
-    yield* datasource
-        .listenMessages(conversationId)
-        .map((models) => models.cast<ChatMessage>().toList());
+  Stream<List<ChatMessage>> listenMessages(String conversationId) {
+    return authRepository.ensureAuthReady().asStream().asyncExpand((_) {
+      return datasource
+          .listenMessages(conversationId)
+          .map((models) => models.cast<ChatMessage>().toList());
+    });
   }
 
   @override

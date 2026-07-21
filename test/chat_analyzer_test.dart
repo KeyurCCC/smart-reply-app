@@ -193,5 +193,38 @@ void main() {
       expect(states[0], isA<ChatAnalyzerLoaded>());
       expect(states[0].messageEntities['msg_abc']?.first, isA<PhoneEntity>());
     });
+
+    test('should analyze multiple un-cached messages sequentially', () async {
+      final message1 = ChatMessage(
+        id: 'msg_1',
+        senderId: 'user_1',
+        text: 'Message 1',
+        type: MessageType.text,
+        status: MessageStatus.sent,
+        createdAt: DateTime.now().subtract(const Duration(seconds: 2)),
+      );
+      final message2 = ChatMessage(
+        id: 'msg_2',
+        senderId: 'user_1',
+        text: 'Message 2',
+        type: MessageType.text,
+        status: MessageStatus.sent,
+        createdAt: DateTime.now().subtract(const Duration(seconds: 1)),
+      );
+
+      analyzerService.mockEntities = [AddressEntity(address: 'Tested Location')];
+
+      final states = <ChatAnalyzerState>[];
+      final sub = bloc.stream.listen(states.add);
+
+      bloc.add(AnalyzeMessagesEvent(messages: [message1, message2], currentUserId: 'user_1'));
+
+      await Future.delayed(const Duration(milliseconds: 100));
+      sub.cancel();
+
+      final lastState = states.last as ChatAnalyzerLoaded;
+      expect(lastState.messageEntities['msg_1']?.first, isA<AddressEntity>());
+      expect(lastState.messageEntities['msg_2']?.first, isA<AddressEntity>());
+    });
   });
 }

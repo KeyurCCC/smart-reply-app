@@ -74,35 +74,36 @@ class ChatAnalyzerBloc extends Bloc<ChatAnalyzerEvent, ChatAnalyzerState> {
       emit(ChatAnalyzerLoaded(currentEntities));
     }
 
-    // 2. Perform live Gemini extraction for the latest message if not in cache/state
-    final latestMessage = event.messages.last;
-    final latestId = latestMessage.id;
+    // 2. Perform live Gemini extraction for any un-analyzed messages in the last 5 messages
+    final startIndex = event.messages.length > 5 ? event.messages.length - 5 : 0;
+    for (var i = startIndex; i < event.messages.length; i++) {
+      final message = event.messages[i];
+      final messageId = message.id;
 
-    if (!currentEntities.containsKey(latestId)) {
-      if (_analyzingMessageIds.contains(latestId)) {
-        return;
+      if (!currentEntities.containsKey(messageId)) {
+        if (_analyzingMessageIds.contains(messageId)) {
+          continue;
+        }
+        _analyzingMessageIds.add(messageId);
+
+        emit(ChatAnalyzerLoading(state.messageEntities));
+
+        final historyStart = i >= 9 ? i - 9 : 0;
+        final history = event.messages.sublist(historyStart, i + 1);
+
+        final entities = await analyzerService.analyzeMessage(
+          targetMessage: message,
+          history: history,
+          currentUserId: event.currentUserId,
+        );
+
+        // Save to Cache
+        await cacheRepository.cacheEntities(messageId, entities);
+
+        currentEntities[messageId] = entities;
+        emit(ChatAnalyzerLoaded(Map<String, List<ChatEntity>>.from(currentEntities)));
+        _analyzingMessageIds.remove(messageId);
       }
-      _analyzingMessageIds.add(latestId);
-
-      emit(ChatAnalyzerLoading(state.messageEntities));
-
-      final history = event.messages.length > 10
-          ? event.messages.sublist(event.messages.length - 10)
-          : event.messages;
-
-      final entities = await analyzerService.analyzeMessage(
-        targetMessage: latestMessage,
-        history: history,
-        currentUserId: event.currentUserId,
-      );
-
-      // Save to Cache
-      await cacheRepository.cacheEntities(latestId, entities);
-
-      final updated = Map<String, List<ChatEntity>>.from(state.messageEntities);
-      updated[latestId] = entities;
-      emit(ChatAnalyzerLoaded(updated));
-      _analyzingMessageIds.remove(latestId);
     }
   }
 

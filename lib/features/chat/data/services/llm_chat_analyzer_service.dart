@@ -3,9 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/features/chat/data/models/chat_entity_parser.dart';
+import 'package:smart_reply_app/features/chat/data/models/email_entity.dart';
+import 'package:smart_reply_app/features/chat/data/models/phone_entity.dart';
+import 'package:smart_reply_app/features/chat/data/models/url_entity.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_entity.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 import 'package:smart_reply_app/features/chat/domain/services/chat_analyzer_service.dart';
@@ -23,10 +27,12 @@ class LlmChatAnalyzerService implements ChatAnalyzerService {
     required List<ChatMessage> history,
     required String currentUserId,
   }) async {
+    final localEntities = _extractLocalEntities(targetMessage);
+
     final apiKey = await settingsRepository.getGeminiApiKey();
     if (apiKey == null || apiKey.isEmpty) {
       debugPrint('[LlmChatAnalyzer] No API key found for direct analysis.');
-      return [];
+      return localEntities;
     }
 
     try {
@@ -87,7 +93,7 @@ class LlmChatAnalyzerService implements ChatAnalyzerService {
     } catch (e) {
       debugPrint('[LlmChatAnalyzer] Analysis failed: $e');
     }
-    return [];
+    return localEntities;
   }
 
   String _buildPrompt({
@@ -135,7 +141,7 @@ Instructions:
 Extract actionable details from the TARGET MESSAGE. Resolve relative dates/times (e.g. "tomorrow", "Friday") based on Current Date ($dateStr) and Current Time ($timeStr).
 
 Identify the following entity types and construct their respective JSON structures:
-1. "meeting": meeting info. Fields: "title" (string), "date" (string YYYY-MM-DD, optional), "time" (string HH:MM, optional), "url" (string, optional)
+1. "meeting": meeting info. Fields: "title" (string), "date" (string YYYY-MM-DD, optional), "time" (string HH:MM, optional), "url" (string, optional). Clarification: Only extract a meeting if there is an explicit plan, proposal, or request to schedule/attend a meeting/calendar appointment (e.g. "let's meet...", "schedule meeting...", or an online meeting URL). Do NOT extract a meeting for general conversational statements, status checks, or generic exclamations (e.g., "ready for tomorrow?", "can't wait to see you then", "see you tomorrow", "are you free?").
 2. "address": physical address or GPS coordinates (e.g. "23.0216,72.5713"). Fields: "address" (string), "latitude" (number, optional), "longitude" (number, optional)
 3. "phone": phone number. Fields: "phoneNumber" (string), "name" (string, optional)
 4. "email": email address. Fields: "emailAddress" (string), "subject" (string, optional), "body" (string, optional)
@@ -210,5 +216,71 @@ Only output valid JSON matching the schema above. Do not output markdown, reason
       debugPrint('[LlmChatAnalyzer] Failed to download image: $e');
     }
     return null;
+  }
+
+  List<ChatEntity> _extractLocalEntities(ChatMessage targetMessage) {
+    final text = targetMessage.text;
+    if (text.isEmpty) return [];
+
+    final entities = <ChatEntity>[];
+
+    // 1. Extract URLs / Links
+    final urlRegex = RegExp(
+      r'https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.(com|org|net|io|co|dev|in|app|ai|me)(/[^\s]*)?',
+      caseSensitive: false,
+    );
+    final urlMatch = urlRegex.firstMatch(text);
+    if (urlMatch != null) {
+      var rawUrl = urlMatch.group(0)!;
+      var fullUrl = rawUrl;
+      if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
+        fullUrl = 'https://$fullUrl';
+      }
+      final lower = fullUrl.toLowerCase();
+      String? platform;
+      if (lower.contains('meet.google.com')) {
+        platform = 'Google Meet';
+      } else if (lower.contains('zoom.us')) {
+        platform = 'Zoom';
+      } else if (lower.contains('teams.microsoft.com')) {
+        platform = 'Microsoft Teams';
+      } else {
+        platform = 'Website';
+      }
+
+      entities.add(
+        UrlEntity(
+          url: fullUrl,
+          platform: platform,
+        ),
+      );
+      return entities;
+    }
+
+    // 2. Extract Phone Numbers
+    final phoneRegex = RegExp(r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}');
+    final phoneMatch = phoneRegex.firstMatch(text);
+    if (phoneMatch != null) {
+      entities.add(
+        PhoneEntity(
+          phoneNumber: phoneMatch.group(0)!,
+        ),
+      );
+      return entities;
+    }
+
+    // 3. Extract Email Addresses
+    final emailRegex = RegExp(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}');
+    final emailMatch = emailRegex.firstMatch(text);
+    if (emailMatch != null) {
+      entities.add(
+        EmailEntity(
+          emailAddress: emailMatch.group(0)!,
+        ),
+      );
+      return entities;
+    }
+
+    return entities;
   }
 }

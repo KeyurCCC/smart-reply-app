@@ -40,6 +40,19 @@ class SuggestionBloc extends Bloc<SuggestionEvent, SuggestionState> {
     GetSuggestionsEvent event,
     Emitter<SuggestionState> emit,
   ) async {
+    if (event.messages.isEmpty) {
+      emit(SuggestionInitial());
+      return;
+    }
+
+    final currentUserId = repository.currentUserId;
+    final lastMessage = event.messages.last;
+
+    if (currentUserId != null && lastMessage.senderId == currentUserId) {
+      emit(SuggestionInitial());
+      return;
+    }
+
     final generation = ++_generationId;
     emit(SuggestionLoading());
 
@@ -56,6 +69,7 @@ class SuggestionBloc extends Bloc<SuggestionEvent, SuggestionState> {
     ClearSuggestionsEvent event,
     Emitter<SuggestionState> emit,
   ) {
+    _generationId++;
     emit(SuggestionInitial());
   }
 }

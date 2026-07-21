@@ -21,17 +21,13 @@ import 'package:smart_reply_app/features/chat/presentation/widgets/message_bubbl
 import 'package:smart_reply_app/features/chat/presentation/widgets/message_input_bar.dart';
 import 'package:smart_reply_app/features/chat/presentation/widgets/smart_reply_chips.dart';
 import 'package:smart_reply_app/features/chat/presentation/widgets/typing_indicator.dart';
-import 'package:smart_reply_app/features/chat/presentation/widgets/action_cards_list.dart';
+import 'package:smart_reply_app/features/chat/presentation/widgets/smart_entity_bubble.dart';
 
 class ChatPage extends StatefulWidget {
   final String conversationId;
   final String partnerName;
 
-  const ChatPage({
-    super.key,
-    required this.conversationId,
-    required this.partnerName,
-  });
+  const ChatPage({super.key, required this.conversationId, required this.partnerName});
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -41,6 +37,7 @@ class _ChatPageState extends State<ChatPage> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   late final ChatBloc _chatBloc;
+  late final SuggestionBloc _suggestionBloc;
   Timer? _typingTimer;
   bool _isTyping = false;
   bool _isSending = false;
@@ -49,6 +46,7 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     _chatBloc = getIt<ChatBloc>()..add(LoadChatEvent(widget.conversationId));
+    _suggestionBloc = getIt<SuggestionBloc>();
     _controller.addListener(_onTextChanged);
   }
 
@@ -59,6 +57,7 @@ class _ChatPageState extends State<ChatPage> {
     _controller.dispose();
     _scrollController.dispose();
     _chatBloc.close();
+    _suggestionBloc.close();
     super.dispose();
   }
 
@@ -83,13 +82,9 @@ class _ChatPageState extends State<ChatPage> {
     if (text.isEmpty || _isSending) return;
 
     _isSending = true;
-    _chatBloc.add(
-      SendMessageEvent(
-        conversationId: widget.conversationId,
-        message: text,
-      ),
-    );
+    _chatBloc.add(SendMessageEvent(conversationId: widget.conversationId, message: text));
     _controller.clear();
+    _suggestionBloc.add(ClearSuggestionsEvent());
 
     _typingTimer?.cancel();
     if (_isTyping) {
@@ -106,7 +101,7 @@ class _ChatPageState extends State<ChatPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        0.0,
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
       );
@@ -207,18 +202,10 @@ class _ChatPageState extends State<ChatPage> {
           title: const Text('Delete Message'),
           content: const Text('Are you sure you want to delete this message for everyone?'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
             FilledButton(
               onPressed: () {
-                _chatBloc.add(
-                  DeleteMessageEvent(
-                    conversationId: widget.conversationId,
-                    messageId: messageId,
-                  ),
-                );
+                _chatBloc.add(DeleteMessageEvent(conversationId: widget.conversationId, messageId: messageId));
                 Navigator.pop(dialogContext);
               },
               style: FilledButton.styleFrom(
@@ -244,25 +231,16 @@ class _ChatPageState extends State<ChatPage> {
     return MultiBlocProvider(
       providers: [
         BlocProvider.value(value: _chatBloc),
-        BlocProvider<SuggestionBloc>(
-          create: (context) => getIt<SuggestionBloc>(),
-        ),
-        BlocProvider<ChatAnalyzerBloc>(
-          create: (context) => getIt<ChatAnalyzerBloc>(),
-        ),
-        BlocProvider<SmartActionBloc>(
-          create: (context) => getIt<SmartActionBloc>(),
-        ),
+        BlocProvider.value(value: _suggestionBloc),
+        BlocProvider<ChatAnalyzerBloc>(create: (context) => getIt<ChatAnalyzerBloc>()),
+        BlocProvider<SmartActionBloc>(create: (context) => getIt<SmartActionBloc>()),
       ],
       child: BlocListener<SmartActionBloc, SmartActionState>(
         listener: (context, state) {
           if (state is SmartActionSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(state.message), behavior: SnackBarBehavior.floating));
           } else if (state is SmartActionFailure) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -288,10 +266,9 @@ class _ChatPageState extends State<ChatPage> {
                         if (state is ChatLoaded && state.partnerTyping) {
                           return Text(
                             'typing...',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.teal,
-                                  fontStyle: FontStyle.italic,
-                                ),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(color: Colors.teal, fontStyle: FontStyle.italic),
                           );
                         }
 
@@ -302,19 +279,18 @@ class _ChatPageState extends State<ChatPage> {
                         if (user.online) {
                           return Text(
                             'online',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.green,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(color: Colors.green, fontWeight: FontWeight.bold),
                           );
                         } else if (user.lastSeen != null) {
                           final timeString = DateFormat.jm().format(user.lastSeen!);
                           final dateString = DateFormat.MMMd().format(user.lastSeen!);
                           return Text(
                             'last seen $dateString at $timeString',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           );
                         }
 
@@ -336,20 +312,13 @@ class _ChatPageState extends State<ChatPage> {
                       if (state.messages.isNotEmpty) {
                         final currentUserId = _chatBloc.repository.currentUserId ?? '';
                         context.read<ChatAnalyzerBloc>().add(
-                              AnalyzeMessagesEvent(
-                                messages: state.messages,
-                                currentUserId: currentUserId,
-                              ),
-                            );
+                          AnalyzeMessagesEvent(messages: state.messages, currentUserId: currentUserId),
+                        );
                         final last = state.messages.last;
                         if (currentUserId.isNotEmpty && last.senderId != currentUserId) {
-                          context.read<SuggestionBloc>().add(
-                                GetSuggestionsEvent(state.messages),
-                              );
+                          context.read<SuggestionBloc>().add(GetSuggestionsEvent(state.messages));
                         } else {
-                          context.read<SuggestionBloc>().add(
-                                ClearSuggestionsEvent(),
-                              );
+                          context.read<SuggestionBloc>().add(ClearSuggestionsEvent());
                         }
                       }
                     }
@@ -369,42 +338,37 @@ class _ChatPageState extends State<ChatPage> {
 
                     return ListView.builder(
                       controller: _scrollController,
+                      reverse: true,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       itemCount: state.messages.length + (state.partnerTyping ? 1 : 0),
                       itemBuilder: (context, index) {
-                        if (state.partnerTyping && index == state.messages.length) {
+                        if (state.partnerTyping && index == 0) {
                           return const TypingBubble();
                         }
 
-                        final message = state.messages[index];
+                        final messageIndex = state.partnerTyping ? index - 1 : index;
+                        final message = state.messages[state.messages.length - 1 - messageIndex];
                         final isMine = message.senderId == currentUserId;
                         return BlocBuilder<ChatAnalyzerBloc, ChatAnalyzerState>(
                           builder: (context, analyzerState) {
                             final entities = analyzerState.messageEntities[message.id] ?? const [];
-                            return Column(
-                              crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GestureDetector(
-                                  onLongPress: isMine
-                                      ? () => _showDeleteMessageDialog(message.id)
-                                      : null,
-                                  child: MessageBubble(
-                                    text: message.text,
-                                    isMine: isMine,
-                                    createdAt: message.createdAt,
-                                    status: message.status,
-                                    type: message.type,
-                                    fileName: message.fileName,
-                                    fileSize: message.fileSize,
-                                  ),
-                                ),
-                                if (entities.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 8.0),
-                                    child: ActionCardsList(entities: entities),
-                                  ),
-                              ],
+                            if (entities.isNotEmpty) {
+                              return GestureDetector(
+                                onLongPress: isMine ? () => _showDeleteMessageDialog(message.id) : null,
+                                child: SmartEntityBubble(message: message, entity: entities.first, isMine: isMine),
+                              );
+                            }
+                            return GestureDetector(
+                              onLongPress: isMine ? () => _showDeleteMessageDialog(message.id) : null,
+                              child: MessageBubble(
+                                text: message.text,
+                                isMine: isMine,
+                                createdAt: message.createdAt,
+                                status: message.status,
+                                type: message.type,
+                                fileName: message.fileName,
+                                fileSize: message.fileSize,
+                              ),
                             );
                           },
                         );
@@ -423,16 +387,14 @@ class _ChatPageState extends State<ChatPage> {
               ),
               BlocBuilder<SuggestionBloc, SuggestionState>(
                 builder: (context, state) {
-                  if (state is SuggestionLoaded &&
-                      state.error != null &&
-                      state.replies.isEmpty) {
+                  if (state is SuggestionLoaded && state.error != null && state.replies.isEmpty) {
                     return Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                       child: Text(
                         state.error!,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error),
                       ),
                     );
                   }
@@ -451,11 +413,7 @@ class _ChatPageState extends State<ChatPage> {
                   );
                 },
               ),
-              MessageInputBar(
-                controller: _controller,
-                onSend: _sendMessage,
-                onAttachPressed: _onAttachPressed,
-              ),
+              MessageInputBar(controller: _controller, onSend: _sendMessage, onAttachPressed: _onAttachPressed),
             ],
           ),
         ),
