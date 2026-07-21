@@ -18,10 +18,16 @@ class ReceiveMessagesEvent extends ChatEvent {
 class SendMessageEvent extends ChatEvent {
   final String conversationId;
   final String message;
+  final String? replyToMessageId;
+  final String? replyToText;
+  final bool? isForwarded;
 
   SendMessageEvent({
     required this.conversationId,
     required this.message,
+    this.replyToMessageId,
+    this.replyToText,
+    this.isForwarded,
   });
 }
 

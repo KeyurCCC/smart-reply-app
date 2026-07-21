@@ -148,6 +148,9 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<void> sendMessage({
     required String conversationId,
     required String message,
+    String? replyToMessageId,
+    String? replyToText,
+    bool? isForwarded,
   }) async {
     final userId = _currentUserId;
     if (userId == null) {
@@ -164,6 +167,9 @@ class ChatRepositoryImpl implements ChatRepository {
       type: MessageType.text,
       status: MessageStatus.sent,
       createdAt: DateTime.now(),
+      replyToMessageId: replyToMessageId,
+      replyToText: replyToText,
+      isForwarded: isForwarded,
     );
 
     await datasource.sendMessage(

@@ -16,6 +16,9 @@ abstract class ChatRepository {
   Future<void> sendMessage({
     required String conversationId,
     required String message,
+    String? replyToMessageId,
+    String? replyToText,
+    bool? isForwarded,
   });
 
   Future<void> deleteMessage({

@@ -179,6 +179,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await repository.sendMessage(
         conversationId: event.conversationId,
         message: event.message,
+        replyToMessageId: event.replyToMessageId,
+        replyToText: event.replyToText,
+        isForwarded: event.isForwarded,
       );
     } catch (e) {
       emit(ChatError(e.toString()));

@@ -10,6 +10,9 @@ class ChatMessage {
   final DateTime createdAt;
   final String? fileName;
   final int? fileSize;
+  final String? replyToMessageId;
+  final String? replyToText;
+  final bool? isForwarded;
 
   const ChatMessage({
     required this.id,
@@ -20,6 +23,9 @@ class ChatMessage {
     required this.createdAt,
     this.fileName,
     this.fileSize,
+    this.replyToMessageId,
+    this.replyToText,
+    this.isForwarded,
   });
 
   ChatMessage copyWith({
@@ -31,6 +37,9 @@ class ChatMessage {
     DateTime? createdAt,
     String? fileName,
     int? fileSize,
+    String? replyToMessageId,
+    String? replyToText,
+    bool? isForwarded,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -41,6 +50,9 @@ class ChatMessage {
       createdAt: createdAt ?? this.createdAt,
       fileName: fileName ?? this.fileName,
       fileSize: fileSize ?? this.fileSize,
+      replyToMessageId: replyToMessageId ?? this.replyToMessageId,
+      replyToText: replyToText ?? this.replyToText,
+      isForwarded: isForwarded ?? this.isForwarded,
     );
   }
 }

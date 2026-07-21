@@ -45,12 +45,14 @@ class SmartEntityBubble extends StatelessWidget {
   final ChatMessage message;
   final ChatEntity entity;
   final bool isMine;
+  final VoidCallback? onReplyTapped;
 
   const SmartEntityBubble({
     super.key,
     required this.message,
     required this.entity,
     required this.isMine,
+    this.onReplyTapped,
   });
 
   // WhatsApp style teal color
@@ -428,6 +430,56 @@ class SmartEntityBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (message.isForwarded == true)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.forward,
+                      size: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Forwarded',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (message.replyToText != null)
+              GestureDetector(
+                onTap: onReplyTapped,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isMine ? Colors.black12 : Colors.black12,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border(
+                      left: BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 4,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    message.replyToText!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
             // Header + Subtitle + Content Row (Side by side with preview)
             Padding(
               padding: const EdgeInsets.all(12.0),

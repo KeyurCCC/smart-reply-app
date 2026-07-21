@@ -14,6 +14,8 @@ import 'package:smart_reply_app/features/chat/presentation/bloc/chat_analyzer_bl
 import 'package:smart_reply_app/features/chat/presentation/bloc/suggestion_bloc.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/smart_action_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
+import 'package:smart_reply_app/features/chat/domain/entities/conversation.dart';
 import 'package:smart_reply_app/core/utils/conversation_id.dart';
 import 'package:smart_reply_app/features/users/domain/entities/app_user.dart';
 import 'package:smart_reply_app/features/users/domain/repository/user_repository.dart';
@@ -41,6 +43,8 @@ class _ChatPageState extends State<ChatPage> {
   Timer? _typingTimer;
   bool _isTyping = false;
   bool _isSending = false;
+  ChatMessage? _replyingTo;
+  final Map<String, GlobalKey> _messageKeys = {};
 
   @override
   void initState() {
@@ -82,8 +86,16 @@ class _ChatPageState extends State<ChatPage> {
     if (text.isEmpty || _isSending) return;
 
     _isSending = true;
-    _chatBloc.add(SendMessageEvent(conversationId: widget.conversationId, message: text));
+    _chatBloc.add(
+      SendMessageEvent(
+        conversationId: widget.conversationId,
+        message: text,
+        replyToMessageId: _replyingTo?.id,
+        replyToText: _replyingTo?.text,
+      ),
+    );
     _controller.clear();
+    setState(() => _replyingTo = null);
     _suggestionBloc.add(ClearSuggestionsEvent());
 
     _typingTimer?.cancel();
@@ -106,6 +118,19 @@ class _ChatPageState extends State<ChatPage> {
         curve: Curves.easeOut,
       );
     });
+  }
+
+  void _scrollToMessage(String? messageId) {
+    if (messageId == null) return;
+    final key = _messageKeys[messageId];
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.5,
+      );
+    }
   }
 
   Future<void> _onAttachPressed() async {
@@ -194,27 +219,94 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Future<void> _showDeleteMessageDialog(String messageId) async {
-    await showDialog<void>(
+  Future<void> _showMessageOptionsBottomSheet(ChatMessage message, bool isMine) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (bottomSheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.reply),
+                title: const Text('Reply'),
+                onTap: () {
+                  Navigator.pop(bottomSheetContext);
+                  setState(() => _replyingTo = message);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.forward),
+                title: const Text('Forward'),
+                onTap: () {
+                  Navigator.pop(bottomSheetContext);
+                  _showForwardDialog(message);
+                },
+              ),
+              if (isMine)
+                ListTile(
+                  leading: const Icon(Icons.delete, color: Colors.red),
+                  title: const Text('Delete', style: TextStyle(color: Colors.red)),
+                  onTap: () {
+                    Navigator.pop(bottomSheetContext);
+                    _chatBloc.add(DeleteMessageEvent(conversationId: widget.conversationId, messageId: message.id));
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showForwardDialog(ChatMessage message) async {
+    showDialog(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Delete Message'),
-          content: const Text('Are you sure you want to delete this message for everyone?'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () {
-                _chatBloc.add(DeleteMessageEvent(conversationId: widget.conversationId, messageId: messageId));
-                Navigator.pop(dialogContext);
+          title: const Text('Forward to...'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: StreamBuilder<List<Conversation>>(
+              stream: _chatBloc.repository.listenConversations(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final conversations = snapshot.data ?? [];
+                if (conversations.isEmpty) {
+                  return const Center(child: Text('No conversations found.'));
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: conversations.length,
+                  itemBuilder: (context, index) {
+                    final conv = conversations[index];
+                    final partner = conv.participants.firstWhere(
+                        (p) => p.id != _chatBloc.repository.currentUserId,
+                        orElse: () => conv.participants.first);
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: partner.imageUrl != null ? NetworkImage(partner.imageUrl!) : null,
+                        child: partner.imageUrl == null ? Text(partner.name[0].toUpperCase()) : null,
+                      ),
+                      title: Text(partner.name),
+                      onTap: () {
+                        _chatBloc.repository.sendMessage(
+                          conversationId: conv.id,
+                          message: message.text,
+                          isForwarded: true,
+                        );
+                        Navigator.pop(dialogContext);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message forwarded')));
+                      },
+                    );
+                  },
+                );
               },
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-                foregroundColor: Theme.of(context).colorScheme.onError,
-              ),
-              child: const Text('Delete'),
             ),
-          ],
+          ),
         );
       },
     );
@@ -352,14 +444,23 @@ class _ChatPageState extends State<ChatPage> {
                         return BlocBuilder<ChatAnalyzerBloc, ChatAnalyzerState>(
                           builder: (context, analyzerState) {
                             final entities = analyzerState.messageEntities[message.id] ?? const [];
+                            final messageKey = _messageKeys.putIfAbsent(message.id, () => GlobalKey());
+                            
                             if (entities.isNotEmpty) {
                               return GestureDetector(
-                                onLongPress: isMine ? () => _showDeleteMessageDialog(message.id) : null,
-                                child: SmartEntityBubble(message: message, entity: entities.first, isMine: isMine),
+                                key: messageKey,
+                                onLongPress: () => _showMessageOptionsBottomSheet(message, isMine),
+                                child: SmartEntityBubble(
+                                  message: message,
+                                  entity: entities.first,
+                                  isMine: isMine,
+                                  onReplyTapped: () => _scrollToMessage(message.replyToMessageId),
+                                ),
                               );
                             }
                             return GestureDetector(
-                              onLongPress: isMine ? () => _showDeleteMessageDialog(message.id) : null,
+                              key: messageKey,
+                              onLongPress: () => _showMessageOptionsBottomSheet(message, isMine),
                               child: MessageBubble(
                                 text: message.text,
                                 isMine: isMine,
@@ -368,6 +469,9 @@ class _ChatPageState extends State<ChatPage> {
                                 type: message.type,
                                 fileName: message.fileName,
                                 fileSize: message.fileSize,
+                                replyToText: message.replyToText,
+                                isForwarded: message.isForwarded ?? false,
+                                onReplyTapped: () => _scrollToMessage(message.replyToMessageId),
                               ),
                             );
                           },
@@ -413,6 +517,31 @@ class _ChatPageState extends State<ChatPage> {
                   );
                 },
               ),
+              if (_replyingTo != null)
+                Container(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.reply, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _replyingTo!.text,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => setState(() => _replyingTo = null),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
               MessageInputBar(controller: _controller, onSend: _sendMessage, onAttachPressed: _onAttachPressed),
             ],
           ),

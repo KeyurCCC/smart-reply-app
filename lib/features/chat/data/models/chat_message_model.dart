@@ -12,6 +12,9 @@ class ChatMessageModel extends ChatMessage {
     required super.createdAt,
     super.fileName,
     super.fileSize,
+    super.replyToMessageId,
+    super.replyToText,
+    super.isForwarded,
   });
 
   factory ChatMessageModel.fromMap(Map<String, dynamic> json) {
@@ -32,6 +35,9 @@ class ChatMessageModel extends ChatMessage {
       createdAt: createdAt,
       fileName: json['fileName'] as String?,
       fileSize: json['fileSize'] as int?,
+      replyToMessageId: json['replyToMessageId'] as String?,
+      replyToText: json['replyToText'] as String?,
+      isForwarded: json['isForwarded'] as bool?,
     );
   }
 
@@ -45,6 +51,9 @@ class ChatMessageModel extends ChatMessage {
       'createdAt': createdAt.millisecondsSinceEpoch,
       if (fileName != null) 'fileName': fileName,
       if (fileSize != null) 'fileSize': fileSize,
+      if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
+      if (replyToText != null) 'replyToText': replyToText,
+      if (isForwarded != null) 'isForwarded': isForwarded,
     };
   }
 }

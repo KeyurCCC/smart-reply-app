@@ -12,6 +12,9 @@ class MessageBubble extends StatelessWidget {
   final MessageType type;
   final String? fileName;
   final int? fileSize;
+  final String? replyToText;
+  final bool isForwarded;
+  final VoidCallback? onReplyTapped;
 
   const MessageBubble({
     super.key,
@@ -22,6 +25,9 @@ class MessageBubble extends StatelessWidget {
     this.type = MessageType.text,
     this.fileName,
     this.fileSize,
+    this.replyToText,
+    this.isForwarded = false,
+    this.onReplyTapped,
   });
 
   @override
@@ -47,8 +53,64 @@ class MessageBubble extends StatelessWidget {
           ),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (isForwarded)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.forward,
+                      size: 12,
+                      color: isMine
+                          ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8)
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Forwarded',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: isMine
+                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8)
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (replyToText != null)
+              GestureDetector(
+                onTap: onReplyTapped,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isMine ? Colors.black26 : Colors.black12,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border(
+                      left: BorderSide(
+                        color: isMine ? Colors.white54 : Theme.of(context).colorScheme.primary,
+                        width: 4,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    replyToText!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isMine
+                          ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.9)
+                          : Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
             _buildMessageContent(context),
             const SizedBox(height: 4),
             Row(
