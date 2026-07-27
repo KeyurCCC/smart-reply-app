@@ -26,6 +26,12 @@ abstract class ChatRepository {
     required String messageId,
   });
 
+  Future<void> toggleReaction({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  });
+
   Future<SmartReplyResult> generateSmartReplies(List<ChatMessage> messages);
 
   Future<void> markConversationRead(String conversationId);

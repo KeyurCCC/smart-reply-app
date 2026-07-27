@@ -15,6 +15,7 @@ class ChatMessageModel extends ChatMessage {
     super.replyToMessageId,
     super.replyToText,
     super.isForwarded,
+    super.reactions,
   });
 
   factory ChatMessageModel.fromMap(Map<String, dynamic> json) {
@@ -24,6 +25,15 @@ class ChatMessageModel extends ChatMessage {
       createdAt = DateTime.fromMillisecondsSinceEpoch(createdVal);
     } else {
       createdAt = DateTime.now();
+    }
+
+    Map<String, String>? reactionsMap;
+    if (json['reactions'] is Map) {
+      reactionsMap = Map<String, String>.from(
+        (json['reactions'] as Map).map(
+          (key, value) => MapEntry(key.toString(), value.toString()),
+        ),
+      );
     }
 
     return ChatMessageModel(
@@ -38,6 +48,7 @@ class ChatMessageModel extends ChatMessage {
       replyToMessageId: json['replyToMessageId'] as String?,
       replyToText: json['replyToText'] as String?,
       isForwarded: json['isForwarded'] as bool?,
+      reactions: reactionsMap,
     );
   }
 
@@ -54,6 +65,7 @@ class ChatMessageModel extends ChatMessage {
       if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
       if (replyToText != null) 'replyToText': replyToText,
       if (isForwarded != null) 'isForwarded': isForwarded,
+      if (reactions != null) 'reactions': reactions,
     };
   }
 }

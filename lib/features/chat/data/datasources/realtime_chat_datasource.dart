@@ -21,6 +21,13 @@ abstract class RealtimeChatDatasource {
     required String messageId,
   });
 
+  Future<void> toggleReaction({
+    required String conversationId,
+    required String messageId,
+    required String userId,
+    required String emoji,
+  });
+
   Future<void> updateConversation({
     required String conversationId,
     required String lastMessage,

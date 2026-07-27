@@ -33,6 +33,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<UpdateTypingStatusEvent>(_updateTypingStatus);
     on<ReceiveTypingStatusEvent>(_receiveTypingStatus);
     on<SendMediaMessageEvent>(_sendMediaMessage);
+    on<ToggleReactionEvent>(_toggleReaction);
   }
 
   @override
@@ -316,5 +317,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } catch (e) {
       emit(ChatError('Failed to send media message: $e'));
     }
+  }
+
+  Future<void> _toggleReaction(
+    ToggleReactionEvent event,
+    Emitter<ChatState> emit,
+  ) async {
+    await repository.toggleReaction(
+      conversationId: event.conversationId,
+      messageId: event.messageId,
+      emoji: event.emoji,
+    );
   }
 }

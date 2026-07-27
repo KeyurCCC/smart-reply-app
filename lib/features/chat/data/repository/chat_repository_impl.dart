@@ -190,6 +190,23 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<void> toggleReaction({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  }) {
+    final userId = _currentUserId;
+    if (userId == null) return Future.value();
+
+    return datasource.toggleReaction(
+      conversationId: conversationId,
+      messageId: messageId,
+      userId: userId,
+      emoji: emoji,
+    );
+  }
+
+  @override
   Future<SmartReplyResult> generateSmartReplies(List<ChatMessage> messages) {
     final userId = _currentUserId;
     if (userId == null) {

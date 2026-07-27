@@ -13,6 +13,7 @@ class ChatMessage {
   final String? replyToMessageId;
   final String? replyToText;
   final bool? isForwarded;
+  final Map<String, String>? reactions;
 
   const ChatMessage({
     required this.id,
@@ -26,6 +27,7 @@ class ChatMessage {
     this.replyToMessageId,
     this.replyToText,
     this.isForwarded,
+    this.reactions,
   });
 
   ChatMessage copyWith({
@@ -40,6 +42,7 @@ class ChatMessage {
     String? replyToMessageId,
     String? replyToText,
     bool? isForwarded,
+    Map<String, String>? reactions,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -53,6 +56,7 @@ class ChatMessage {
       replyToMessageId: replyToMessageId ?? this.replyToMessageId,
       replyToText: replyToText ?? this.replyToText,
       isForwarded: isForwarded ?? this.isForwarded,
+      reactions: reactions ?? this.reactions,
     );
   }
 }

@@ -1,8 +1,10 @@
-// Trigger analysis reload
 import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:smart_reply_app/core/enums/message_type.dart';
@@ -46,9 +48,16 @@ class _ChatPageState extends State<ChatPage> {
   ChatMessage? _replyingTo;
   final Map<String, GlobalKey> _messageKeys = {};
 
+  AudioRecorder? _audioRecorder;
+  bool _isRecording = false;
+  Duration _recordingDuration = Duration.zero;
+  Timer? _recordingTimer;
+  DateTime? _recordStartTime;
+
   @override
   void initState() {
     super.initState();
+    _audioRecorder = AudioRecorder();
     _chatBloc = getIt<ChatBloc>()..add(LoadChatEvent(widget.conversationId));
     _suggestionBloc = getIt<SuggestionBloc>();
     _controller.addListener(_onTextChanged);
@@ -56,6 +65,8 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _audioRecorder?.dispose();
+    _recordingTimer?.cancel();
     _controller.removeListener(_onTextChanged);
     _typingTimer?.cancel();
     _controller.dispose();
@@ -109,14 +120,90 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder!.hasPermission()) {
+        final dir = await getTemporaryDirectory();
+        final path = '${dir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+        await _audioRecorder!.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+        _recordStartTime = DateTime.now();
+        setState(() {
+          _isRecording = true;
+          _recordingDuration = Duration.zero;
+        });
+
+        _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (_recordStartTime != null) {
+            setState(() {
+              _recordingDuration = DateTime.now().difference(_recordStartTime!);
+            });
+          }
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Microphone permission required')));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error starting record: $e');
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      final path = await _audioRecorder!.stop();
+      _recordingTimer?.cancel();
+      _recordStartTime = null;
+      setState(() {
+        _isRecording = false;
+        _recordingDuration = Duration.zero;
+      });
+
+      if (path != null) {
+        final file = File(path);
+        final size = await file.length();
+
+        _chatBloc.add(
+          SendMediaMessageEvent(
+            conversationId: widget.conversationId,
+            localPath: path,
+            type: MessageType.audio,
+            fileName: 'Voice message',
+            fileSize: size,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error stopping record: $e');
+    }
+  }
+
+  Future<void> _cancelRecording() async {
+    try {
+      final path = await _audioRecorder!.stop();
+      _recordingTimer?.cancel();
+      _recordStartTime = null;
+      setState(() {
+        _isRecording = false;
+        _recordingDuration = Duration.zero;
+      });
+
+      if (path != null) {
+        final file = File(path);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error canceling record: $e');
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        0.0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
+      _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
     });
   }
 
@@ -220,39 +307,102 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _showMessageOptionsBottomSheet(ChatMessage message, bool isMine) async {
+    final emojis = ['❤️', '👍', '😂', '😮', '😢', '🙏'];
+    final currentUserId = _chatBloc.repository.currentUserId;
+
     await showModalBottomSheet<void>(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (bottomSheetContext) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.reply),
-                title: const Text('Reply'),
-                onTap: () {
-                  Navigator.pop(bottomSheetContext);
-                  setState(() => _replyingTo = message);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.forward),
-                title: const Text('Forward'),
-                onTap: () {
-                  Navigator.pop(bottomSheetContext);
-                  _showForwardDialog(message);
-                },
-              ),
-              if (isMine)
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: emojis.map((emoji) {
+                      final isSelected = currentUserId != null &&
+                          message.reactions?[currentUserId] == emoji;
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.pop(bottomSheetContext);
+                          _chatBloc.add(
+                            ToggleReactionEvent(
+                              conversationId: widget.conversationId,
+                              messageId: message.id,
+                              emoji: emoji,
+                            ),
+                          );
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Colors.transparent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(emoji, style: const TextStyle(fontSize: 26)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.delete, color: Colors.red),
-                  title: const Text('Delete', style: TextStyle(color: Colors.red)),
+                  leading: const Icon(Icons.reply),
+                  title: const Text('Reply'),
                   onTap: () {
                     Navigator.pop(bottomSheetContext);
-                    _chatBloc.add(DeleteMessageEvent(conversationId: widget.conversationId, messageId: message.id));
+                    setState(() => _replyingTo = message);
                   },
                 ),
-            ],
+                if (message.type == MessageType.text)
+                  ListTile(
+                    leading: const Icon(Icons.copy),
+                    title: const Text('Copy Text'),
+                    onTap: () {
+                      Navigator.pop(bottomSheetContext);
+                      Clipboard.setData(ClipboardData(text: message.text));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Message copied to clipboard'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.forward),
+                  title: const Text('Forward'),
+                  onTap: () {
+                    Navigator.pop(bottomSheetContext);
+                    _showForwardDialog(message);
+                  },
+                ),
+                if (isMine)
+                  ListTile(
+                    leading: const Icon(Icons.delete, color: Colors.red),
+                    title: const Text('Delete', style: TextStyle(color: Colors.red)),
+                    onTap: () {
+                      Navigator.pop(bottomSheetContext);
+                      _chatBloc.add(
+                        DeleteMessageEvent(
+                          conversationId: widget.conversationId,
+                          messageId: message.id,
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -284,8 +434,9 @@ class _ChatPageState extends State<ChatPage> {
                   itemBuilder: (context, index) {
                     final conv = conversations[index];
                     final partner = conv.participants.firstWhere(
-                        (p) => p.id != _chatBloc.repository.currentUserId,
-                        orElse: () => conv.participants.first);
+                      (p) => p.id != _chatBloc.repository.currentUserId,
+                      orElse: () => conv.participants.first,
+                    );
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundImage: partner.imageUrl != null ? NetworkImage(partner.imageUrl!) : null,
@@ -441,40 +592,67 @@ class _ChatPageState extends State<ChatPage> {
                         final messageIndex = state.partnerTyping ? index - 1 : index;
                         final message = state.messages[state.messages.length - 1 - messageIndex];
                         final isMine = message.senderId == currentUserId;
-                        return BlocBuilder<ChatAnalyzerBloc, ChatAnalyzerState>(
-                          builder: (context, analyzerState) {
-                            final entities = analyzerState.messageEntities[message.id] ?? const [];
-                            final messageKey = _messageKeys.putIfAbsent(message.id, () => GlobalKey());
-                            
-                            if (entities.isNotEmpty) {
+                        return Dismissible(
+                          key: ValueKey('dismiss_${message.id}'),
+                          direction: DismissDirection.startToEnd,
+                          confirmDismiss: (direction) async {
+                            setState(() => _replyingTo = message);
+                            return false;
+                          },
+                          background: Container(
+                            alignment: Alignment.centerLeft,
+                            padding: const EdgeInsets.only(left: 16),
+                            child: Icon(
+                              Icons.reply,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          child: BlocBuilder<ChatAnalyzerBloc, ChatAnalyzerState>(
+                            builder: (context, analyzerState) {
+                              final entities = analyzerState.messageEntities[message.id] ?? const [];
+                              final messageKey = _messageKeys.putIfAbsent(message.id, () => GlobalKey());
+
+                              if (entities.isNotEmpty && message.type == MessageType.text) {
+                                return GestureDetector(
+                                  key: messageKey,
+                                  onLongPress: () => _showMessageOptionsBottomSheet(message, isMine),
+                                  child: SmartEntityBubble(
+                                    message: message,
+                                    entity: entities.first,
+                                    isMine: isMine,
+                                    onReplyTapped: () => _scrollToMessage(message.replyToMessageId),
+                                  ),
+                                );
+                              }
                               return GestureDetector(
                                 key: messageKey,
                                 onLongPress: () => _showMessageOptionsBottomSheet(message, isMine),
-                                child: SmartEntityBubble(
-                                  message: message,
-                                  entity: entities.first,
+                                child: MessageBubble(
+                                  text: message.text,
                                   isMine: isMine,
+                                  createdAt: message.createdAt,
+                                  status: message.status,
+                                  type: message.type,
+                                  fileName: message.fileName,
+                                  fileSize: message.fileSize,
+                                  replyToText: message.replyToText,
+                                  isForwarded: message.isForwarded ?? false,
+                                  reactions: message.reactions,
+                                  currentUserId: currentUserId,
                                   onReplyTapped: () => _scrollToMessage(message.replyToMessageId),
+                                  onReactionTapped: (emoji) {
+                                    _chatBloc.add(
+                                      ToggleReactionEvent(
+                                        conversationId: widget.conversationId,
+                                        messageId: message.id,
+                                        emoji: emoji,
+                                      ),
+                                    );
+                                  },
                                 ),
                               );
-                            }
-                            return GestureDetector(
-                              key: messageKey,
-                              onLongPress: () => _showMessageOptionsBottomSheet(message, isMine),
-                              child: MessageBubble(
-                                text: message.text,
-                                isMine: isMine,
-                                createdAt: message.createdAt,
-                                status: message.status,
-                                type: message.type,
-                                fileName: message.fileName,
-                                fileSize: message.fileSize,
-                                replyToText: message.replyToText,
-                                isForwarded: message.isForwarded ?? false,
-                                onReplyTapped: () => _scrollToMessage(message.replyToMessageId),
-                              ),
-                            );
-                          },
+                            },
+                          ),
                         );
                       },
                     );
@@ -517,32 +695,18 @@ class _ChatPageState extends State<ChatPage> {
                   );
                 },
               ),
-              if (_replyingTo != null)
-                Container(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.reply, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _replyingTo!.text,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 20),
-                        onPressed: () => setState(() => _replyingTo = null),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                ),
-              MessageInputBar(controller: _controller, onSend: _sendMessage, onAttachPressed: _onAttachPressed),
+              MessageInputBar(
+                controller: _controller,
+                onSend: _sendMessage,
+                onAttachPressed: _onAttachPressed,
+                isRecording: _isRecording,
+                recordingDuration: _recordingDuration,
+                onRecordStart: _startRecording,
+                onRecordStop: _stopRecording,
+                onRecordCancel: _cancelRecording,
+                replyToText: _replyingTo?.text,
+                onCancelReply: () => setState(() => _replyingTo = null),
+              ),
             ],
           ),
         ),

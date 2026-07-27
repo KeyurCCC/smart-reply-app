@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:smart_reply_app/core/enums/message_status.dart';
 import 'package:smart_reply_app/core/enums/message_type.dart';
+import 'package:smart_reply_app/features/chat/presentation/widgets/fullscreen_image_viewer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -14,7 +16,11 @@ class MessageBubble extends StatelessWidget {
   final int? fileSize;
   final String? replyToText;
   final bool isForwarded;
+  final Map<String, String>? reactions;
+  final String? currentUserId;
   final VoidCallback? onReplyTapped;
+  final VoidCallback? onImageTapped;
+  final ValueChanged<String>? onReactionTapped;
 
   const MessageBubble({
     super.key,
@@ -27,7 +33,11 @@ class MessageBubble extends StatelessWidget {
     this.fileSize,
     this.replyToText,
     this.isForwarded = false,
+    this.reactions,
+    this.currentUserId,
     this.onReplyTapped,
+    this.onImageTapped,
+    this.onReactionTapped,
   });
 
   @override
@@ -131,15 +141,79 @@ class MessageBubble extends StatelessWidget {
                 ],
               ],
             ),
+            if (reactions != null && reactions!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              _buildReactionsBadge(context),
+            ],
           ],
         ),
       ),
     );
   }
 
+  Widget _buildReactionsBadge(BuildContext context) {
+    if (reactions == null || reactions!.isEmpty) return const SizedBox.shrink();
+
+    final counts = <String, int>{};
+    for (final emoji in reactions!.values) {
+      counts[emoji] = (counts[emoji] ?? 0) + 1;
+    }
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: counts.entries.map((entry) {
+        final emoji = entry.key;
+        final count = entry.value;
+        final isMineReaction = currentUserId != null &&
+            reactions![currentUserId] == emoji;
+
+        return GestureDetector(
+          onTap: () => onReactionTapped?.call(emoji),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: isMineReaction
+                  ? (isMine ? Colors.white38 : Theme.of(context).colorScheme.primaryContainer)
+                  : (isMine ? Colors.black26 : Colors.black12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isMineReaction
+                    ? (isMine ? Colors.white : Theme.of(context).colorScheme.primary)
+                    : Colors.transparent,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 12)),
+                if (count > 1) ...[
+                  const SizedBox(width: 3),
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isMine
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildMessageContent(BuildContext context) {
     if (type == MessageType.image) {
       return _buildImageContent(context);
+    } else if (type == MessageType.audio) {
+      return _buildAudioContent(context);
     } else if (type == MessageType.file) {
       return _buildFileContent(context);
     } else {
@@ -158,7 +232,20 @@ class MessageBubble extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: GestureDetector(
-        onTap: () => _launchURL(text),
+        onTap: () {
+          if (onImageTapped != null) {
+            onImageTapped!();
+          } else {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => FullscreenImageViewer(
+                  imageUrl: text,
+                  title: fileName ?? 'Image',
+                ),
+              ),
+            );
+          }
+        },
         child: Image.network(
           text,
           fit: BoxFit.cover,
@@ -184,6 +271,10 @@ class MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildAudioContent(BuildContext context) {
+    return _AudioPlayerWidget(url: text, isMine: isMine);
   }
 
   Widget _buildFileContent(BuildContext context) {
@@ -291,3 +382,130 @@ class MessageBubble extends StatelessWidget {
     );
   }
 }
+
+class _AudioPlayerWidget extends StatefulWidget {
+  final String url;
+  final bool isMine;
+
+  const _AudioPlayerWidget({required this.url, required this.isMine});
+
+  @override
+  State<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
+}
+
+class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAudioPlayer();
+  }
+
+  Future<void> _initAudioPlayer() async {
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+        });
+      }
+    });
+
+    _audioPlayer.onDurationChanged.listen((newDuration) {
+      if (mounted) {
+        setState(() {
+          _duration = newDuration;
+        });
+      }
+    });
+
+    _audioPlayer.onPositionChanged.listen((newPosition) {
+      if (mounted) {
+        setState(() {
+          _position = newPosition;
+        });
+      }
+    });
+    
+    _audioPlayer.setSourceUrl(widget.url).catchError((_) {
+      // Ignored for now
+    });
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return "$minutes:$seconds";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.isMine
+        ? Theme.of(context).colorScheme.onPrimary
+        : Theme.of(context).colorScheme.onSurface;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: Icon(
+            _isPlaying ? Icons.pause : Icons.play_arrow,
+            color: color,
+          ),
+          onPressed: () {
+            if (_isPlaying) {
+              _audioPlayer.pause();
+            } else {
+              _audioPlayer.play(UrlSource(widget.url));
+            }
+          },
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SliderTheme(
+                data: SliderThemeData(
+                  trackHeight: 2,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                  activeTrackColor: color,
+                  inactiveTrackColor: color.withValues(alpha: 0.3),
+                  thumbColor: color,
+                ),
+                child: Slider(
+                  min: 0,
+                  max: _duration.inMilliseconds > 0 ? _duration.inMilliseconds.toDouble() : 1.0,
+                  value: _position.inMilliseconds.toDouble().clamp(
+                        0.0,
+                        _duration.inMilliseconds > 0 ? _duration.inMilliseconds.toDouble() : 1.0,
+                      ),
+                  onChanged: (val) {
+                    _audioPlayer.seek(Duration(milliseconds: val.toInt()));
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  "${_formatDuration(_position)} / ${_formatDuration(_duration)}",
+                  style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+

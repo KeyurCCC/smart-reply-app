@@ -79,3 +79,15 @@ class SendMediaMessageEvent extends ChatEvent {
     required this.fileSize,
   });
 }
+
+class ToggleReactionEvent extends ChatEvent {
+  final String conversationId;
+  final String messageId;
+  final String emoji;
+
+  ToggleReactionEvent({
+    required this.conversationId,
+    required this.messageId,
+    required this.emoji,
+  });
+}

@@ -85,6 +85,22 @@ class RealtimeChatDatasourceImpl implements RealtimeChatDatasource {
   }
 
   @override
+  Future<void> toggleReaction({
+    required String conversationId,
+    required String messageId,
+    required String userId,
+    required String emoji,
+  }) async {
+    final ref = database.ref('messages/$conversationId/$messageId/reactions/$userId');
+    final snapshot = await ref.get();
+    if (snapshot.exists && snapshot.value == emoji) {
+      await ref.remove();
+    } else {
+      await ref.set(emoji);
+    }
+  }
+
+  @override
   Future<void> updateConversation({
     required String conversationId,
     required String lastMessage,
