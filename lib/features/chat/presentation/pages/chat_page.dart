@@ -15,6 +15,7 @@ import 'package:smart_reply_app/features/chat/presentation/bloc/chat_state.dart'
 import 'package:smart_reply_app/features/chat/presentation/bloc/chat_analyzer_bloc.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/suggestion_bloc.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/smart_action_bloc.dart';
+import 'package:smart_reply_app/features/chat/presentation/bloc/translation_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/conversation.dart';
@@ -42,6 +43,7 @@ class _ChatPageState extends State<ChatPage> {
   final _scrollController = ScrollController();
   late final ChatBloc _chatBloc;
   late final SuggestionBloc _suggestionBloc;
+  late final TranslationBloc _translationBloc;
   Timer? _typingTimer;
   bool _isTyping = false;
   bool _isSending = false;
@@ -60,6 +62,7 @@ class _ChatPageState extends State<ChatPage> {
     _audioRecorder = AudioRecorder();
     _chatBloc = getIt<ChatBloc>()..add(LoadChatEvent(widget.conversationId));
     _suggestionBloc = getIt<SuggestionBloc>();
+    _translationBloc = getIt<TranslationBloc>();
     _controller.addListener(_onTextChanged);
   }
 
@@ -73,6 +76,7 @@ class _ChatPageState extends State<ChatPage> {
     _scrollController.dispose();
     _chatBloc.close();
     _suggestionBloc.close();
+    _translationBloc.close();
     super.dispose();
   }
 
@@ -364,7 +368,20 @@ class _ChatPageState extends State<ChatPage> {
                     setState(() => _replyingTo = message);
                   },
                 ),
-                if (message.type == MessageType.text)
+                if (message.type == MessageType.text) ...[
+                  ListTile(
+                    leading: const Icon(Icons.g_translate),
+                    title: const Text('Translate Message'),
+                    onTap: () {
+                      Navigator.pop(bottomSheetContext);
+                      _translationBloc.add(
+                        TranslateMessageEvent(
+                          messageId: message.id,
+                          text: message.text,
+                        ),
+                      );
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.copy),
                     title: const Text('Copy Text'),
@@ -379,6 +396,7 @@ class _ChatPageState extends State<ChatPage> {
                       );
                     },
                   ),
+                ],
                 ListTile(
                   leading: const Icon(Icons.forward),
                   title: const Text('Forward'),
@@ -475,6 +493,7 @@ class _ChatPageState extends State<ChatPage> {
       providers: [
         BlocProvider.value(value: _chatBloc),
         BlocProvider.value(value: _suggestionBloc),
+        BlocProvider.value(value: _translationBloc),
         BlocProvider<ChatAnalyzerBloc>(create: (context) => getIt<ChatAnalyzerBloc>()),
         BlocProvider<SmartActionBloc>(create: (context) => getIt<SmartActionBloc>()),
       ],
@@ -496,6 +515,35 @@ class _ChatPageState extends State<ChatPage> {
         },
         child: Scaffold(
           appBar: AppBar(
+            actions: [
+              BlocBuilder<TranslationBloc, TranslationState>(
+                builder: (context, translationState) {
+                  return IconButton(
+                    tooltip: 'Auto-Translate (${translationState.targetLanguage})',
+                    icon: Icon(
+                      Icons.g_translate,
+                      color: translationState.autoTranslateEnabled
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    onPressed: () {
+                      final newAuto = !translationState.autoTranslateEnabled;
+                      _translationBloc.add(ToggleAutoTranslateEvent(newAuto));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            newAuto
+                                ? 'Auto-translate enabled (${translationState.targetLanguage})'
+                                : 'Auto-translate disabled',
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -624,32 +672,57 @@ class _ChatPageState extends State<ChatPage> {
                                   ),
                                 );
                               }
-                              return GestureDetector(
-                                key: messageKey,
-                                onLongPress: () => _showMessageOptionsBottomSheet(message, isMine),
-                                child: MessageBubble(
-                                  text: message.text,
-                                  isMine: isMine,
-                                  createdAt: message.createdAt,
-                                  status: message.status,
-                                  type: message.type,
-                                  fileName: message.fileName,
-                                  fileSize: message.fileSize,
-                                  replyToText: message.replyToText,
-                                  isForwarded: message.isForwarded ?? false,
-                                  reactions: message.reactions,
-                                  currentUserId: currentUserId,
-                                  onReplyTapped: () => _scrollToMessage(message.replyToMessageId),
-                                  onReactionTapped: (emoji) {
-                                    _chatBloc.add(
-                                      ToggleReactionEvent(
-                                        conversationId: widget.conversationId,
-                                        messageId: message.id,
-                                        emoji: emoji,
-                                      ),
-                                    );
-                                  },
-                                ),
+                              return BlocBuilder<TranslationBloc, TranslationState>(
+                                builder: (context, translationState) {
+                                  final translatedText = translationState.translations[message.id];
+                                  final isTranslating = translationState.loadingMap[message.id] ?? false;
+
+                                  if (translationState.autoTranslateEnabled &&
+                                      message.type == MessageType.text &&
+                                      !isMine &&
+                                      translatedText == null &&
+                                      !isTranslating) {
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      _translationBloc.add(
+                                        TranslateMessageEvent(
+                                          messageId: message.id,
+                                          text: message.text,
+                                        ),
+                                      );
+                                    });
+                                  }
+
+                                  return GestureDetector(
+                                    key: messageKey,
+                                    onLongPress: () => _showMessageOptionsBottomSheet(message, isMine),
+                                    child: MessageBubble(
+                                      text: message.text,
+                                      isMine: isMine,
+                                      createdAt: message.createdAt,
+                                      status: message.status,
+                                      type: message.type,
+                                      fileName: message.fileName,
+                                      fileSize: message.fileSize,
+                                      replyToText: message.replyToText,
+                                      isForwarded: message.isForwarded ?? false,
+                                      reactions: message.reactions,
+                                      currentUserId: currentUserId,
+                                      translatedText: translatedText,
+                                      isTranslating: isTranslating,
+                                      targetLanguage: translationState.targetLanguage,
+                                      onReplyTapped: () => _scrollToMessage(message.replyToMessageId),
+                                      onReactionTapped: (emoji) {
+                                        _chatBloc.add(
+                                          ToggleReactionEvent(
+                                            conversationId: widget.conversationId,
+                                            messageId: message.id,
+                                            emoji: emoji,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
                               );
                             },
                           ),

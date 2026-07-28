@@ -1,4 +1,3 @@
-// Trigger analysis reload
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:smart_reply_app/core/di/injection.dart';
@@ -80,7 +79,9 @@ class _SettingsPageState extends State<SettingsPage> {
     await _settingsRepository.setGeminiApiKey(_apiKeyController.text);
     if (!mounted) return;
     setState(() => _testResult = null);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gemini API key saved on this device')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Gemini API key saved on this device')),
+    );
   }
 
   Future<void> _testApiKey() async {
@@ -96,7 +97,7 @@ class _SettingsPageState extends State<SettingsPage> {
     });
 
     try {
-      final model = GenerativeModel(model: 'gemini-3.1-flash-lite', apiKey: apiKey);
+      final model = GenerativeModel(model: 'gemini-3.1-flash-lite-preview', apiKey: apiKey);
       final response = await model.generateContent([Content.text('Reply with exactly: OK')]);
       final text = response.text?.trim() ?? '';
       if (!mounted) return;
@@ -208,7 +209,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const Divider(height: 32),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text('AI Context Metadata', style: Theme.of(context).textTheme.titleMedium),
+                  child: Text('AI & Translation Settings', style: Theme.of(context).textTheme.titleMedium),
                 ),
                 ListTile(
                   title: const Text('Relationship Type'),
@@ -227,7 +228,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
                 ListTile(
-                  title: const Text('Preferred Language'),
+                  title: const Text('Preferred Language / Translation Target'),
                   subtitle: Text(_preferredLanguage),
                   trailing: DropdownButton<String>(
                     value: _preferredLanguage,
@@ -241,6 +242,12 @@ class _SettingsPageState extends State<SettingsPage> {
                       DropdownMenuItem(value: 'French', child: Text('French')),
                       DropdownMenuItem(value: 'German', child: Text('German')),
                       DropdownMenuItem(value: 'Chinese', child: Text('Chinese')),
+                      DropdownMenuItem(value: 'Japanese', child: Text('Japanese')),
+                      DropdownMenuItem(value: 'Portuguese', child: Text('Portuguese')),
+                      DropdownMenuItem(value: 'Arabic', child: Text('Arabic')),
+                      DropdownMenuItem(value: 'Italian', child: Text('Italian')),
+                      DropdownMenuItem(value: 'Korean', child: Text('Korean')),
+                      DropdownMenuItem(value: 'Russian', child: Text('Russian')),
                     ],
                   ),
                 ),

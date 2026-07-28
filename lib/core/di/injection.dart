@@ -27,6 +27,9 @@ import 'package:smart_reply_app/features/chat/data/services/llm_chat_analyzer_se
 import 'package:smart_reply_app/features/chat/presentation/bloc/chat_analyzer_bloc.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/suggestion_bloc.dart';
 import 'package:smart_reply_app/features/chat/presentation/bloc/smart_action_bloc.dart';
+import 'package:smart_reply_app/features/chat/domain/services/translation_service.dart';
+import 'package:smart_reply_app/features/chat/data/services/llm_translation_service.dart';
+import 'package:smart_reply_app/features/chat/presentation/bloc/translation_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -114,5 +117,16 @@ Future<void> configureDependencies() async {
   );
   getIt.registerFactory<SmartActionBloc>(
     () => SmartActionBloc(),
+  );
+
+  getIt.registerLazySingleton<TranslationService>(
+    () => LlmTranslationService(settingsRepository: getIt()),
+  );
+
+  getIt.registerFactory<TranslationBloc>(
+    () => TranslationBloc(
+      translationService: getIt(),
+      settingsRepository: getIt(),
+    ),
   );
 }

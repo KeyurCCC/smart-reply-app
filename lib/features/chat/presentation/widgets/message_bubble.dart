@@ -18,6 +18,9 @@ class MessageBubble extends StatelessWidget {
   final bool isForwarded;
   final Map<String, String>? reactions;
   final String? currentUserId;
+  final String? translatedText;
+  final bool isTranslating;
+  final String? targetLanguage;
   final VoidCallback? onReplyTapped;
   final VoidCallback? onImageTapped;
   final ValueChanged<String>? onReactionTapped;
@@ -35,6 +38,9 @@ class MessageBubble extends StatelessWidget {
     this.isForwarded = false,
     this.reactions,
     this.currentUserId,
+    this.translatedText,
+    this.isTranslating = false,
+    this.targetLanguage,
     this.onReplyTapped,
     this.onImageTapped,
     this.onReactionTapped,
@@ -122,6 +128,17 @@ class MessageBubble extends StatelessWidget {
                 ),
               ),
             _buildMessageContent(context),
+            if (isTranslating)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (translatedText != null && translatedText!.isNotEmpty)
+              _buildTranslationBox(context),
             const SizedBox(height: 4),
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -206,6 +223,62 @@ class MessageBubble extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildTranslationBox(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isMine ? Colors.black26 : Colors.black12,
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(
+            color: isMine ? Colors.white70 : Theme.of(context).colorScheme.primary,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.g_translate,
+                size: 14,
+                color: isMine
+                    ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.9)
+                    : Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Translated (${targetLanguage ?? "EN"})',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isMine
+                      ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.9)
+                      : Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            translatedText!,
+            style: TextStyle(
+              fontSize: 13,
+              fontStyle: FontStyle.italic,
+              color: isMine
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
