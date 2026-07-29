@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/features/chat/data/models/chat_entity_parser.dart';

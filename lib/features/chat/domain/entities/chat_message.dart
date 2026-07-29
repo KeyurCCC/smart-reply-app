@@ -1,5 +1,6 @@
 import 'package:smart_reply_app/core/enums/message_status.dart';
 import 'package:smart_reply_app/core/enums/message_type.dart';
+import 'package:smart_reply_app/features/chat/domain/entities/chat_entity.dart';
 
 class ChatMessage {
   final String id;
@@ -14,6 +15,7 @@ class ChatMessage {
   final String? replyToText;
   final bool? isForwarded;
   final Map<String, String>? reactions;
+  final List<ChatEntity>? entities;
 
   const ChatMessage({
     required this.id,
@@ -28,6 +30,7 @@ class ChatMessage {
     this.replyToText,
     this.isForwarded,
     this.reactions,
+    this.entities,
   });
 
   ChatMessage copyWith({
@@ -43,6 +46,7 @@ class ChatMessage {
     String? replyToText,
     bool? isForwarded,
     Map<String, String>? reactions,
+    List<ChatEntity>? entities,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -57,6 +61,7 @@ class ChatMessage {
       replyToText: replyToText ?? this.replyToText,
       isForwarded: isForwarded ?? this.isForwarded,
       reactions: reactions ?? this.reactions,
+      entities: entities ?? this.entities,
     );
   }
 }

@@ -603,7 +603,11 @@ class _ChatPageState extends State<ChatPage> {
                       if (state.messages.isNotEmpty) {
                         final currentUserId = _chatBloc.repository.currentUserId ?? '';
                         context.read<ChatAnalyzerBloc>().add(
-                          AnalyzeMessagesEvent(messages: state.messages, currentUserId: currentUserId),
+                          AnalyzeMessagesEvent(
+                            messages: state.messages,
+                            currentUserId: currentUserId,
+                            conversationId: widget.conversationId,
+                          ),
                         );
                         final last = state.messages.last;
                         if (currentUserId.isNotEmpty && last.senderId != currentUserId) {

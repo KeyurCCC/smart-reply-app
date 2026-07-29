@@ -303,4 +303,15 @@ class RealtimeChatDatasourceImpl implements RealtimeChatDatasource {
 
     await database.ref().update(updates);
   }
+
+  @override
+  Future<void> saveMessageEntities({
+    required String conversationId,
+    required String messageId,
+    required List<dynamic> entitiesJson,
+  }) async {
+    await database
+        .ref('messages/$conversationId/$messageId/entities')
+        .set(entitiesJson);
+  }
 }

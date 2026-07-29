@@ -16,6 +16,12 @@ abstract class RealtimeChatDatasource {
     required ChatMessageModel message,
   });
 
+  Future<void> saveMessageEntities({
+    required String conversationId,
+    required String messageId,
+    required List<dynamic> entitiesJson,
+  });
+
   Future<void> deleteMessage({
     required String conversationId,
     required String messageId,

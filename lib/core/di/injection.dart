@@ -113,6 +113,7 @@ Future<void> configureDependencies() async {
     () => ChatAnalyzerBloc(
       analyzerService: getIt(),
       cacheRepository: getIt(),
+      chatRepository: getIt(),
     ),
   );
   getIt.registerFactory<SmartActionBloc>(

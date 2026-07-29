@@ -1,5 +1,6 @@
 import 'package:smart_reply_app/core/enums/message_type.dart';
 import 'package:smart_reply_app/core/result/result.dart';
+import 'package:smart_reply_app/features/chat/domain/entities/chat_entity.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/smart_reply_result.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/conversation.dart';
@@ -19,6 +20,12 @@ abstract class ChatRepository {
     String? replyToMessageId,
     String? replyToText,
     bool? isForwarded,
+  });
+
+  Future<void> saveMessageEntities({
+    required String conversationId,
+    required String messageId,
+    required List<ChatEntity> entities,
   });
 
   Future<void> deleteMessage({

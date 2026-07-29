@@ -8,6 +8,7 @@ import 'package:smart_reply_app/features/auth/domain/repository/auth_repository.
 import 'package:smart_reply_app/features/chat/data/datasources/realtime_chat_datasource.dart';
 import 'package:smart_reply_app/features/chat/data/models/chat_message_model.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/smart_reply_result.dart';
+import 'package:smart_reply_app/features/chat/domain/entities/chat_entity.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_user.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/conversation.dart';
@@ -333,6 +334,20 @@ class ChatRepositoryImpl implements ChatRepository {
     await datasource.sendMessage(
       conversationId: conversationId,
       message: chatMessage,
+    );
+  }
+
+  @override
+  Future<void> saveMessageEntities({
+    required String conversationId,
+    required String messageId,
+    required List<ChatEntity> entities,
+  }) {
+    final jsonList = entities.map((e) => e.toJson()).toList();
+    return datasource.saveMessageEntities(
+      conversationId: conversationId,
+      messageId: messageId,
+      entitiesJson: jsonList,
     );
   }
 }

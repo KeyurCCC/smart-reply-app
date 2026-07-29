@@ -1,5 +1,7 @@
 import 'package:smart_reply_app/core/enums/message_status.dart';
 import 'package:smart_reply_app/core/enums/message_type.dart';
+import 'package:smart_reply_app/features/chat/data/models/chat_entity_parser.dart';
+import 'package:smart_reply_app/features/chat/domain/entities/chat_entity.dart';
 import 'package:smart_reply_app/features/chat/domain/entities/chat_message.dart';
 
 class ChatMessageModel extends ChatMessage {
@@ -16,6 +18,7 @@ class ChatMessageModel extends ChatMessage {
     super.replyToText,
     super.isForwarded,
     super.reactions,
+    super.entities,
   });
 
   factory ChatMessageModel.fromMap(Map<String, dynamic> json) {
@@ -36,6 +39,22 @@ class ChatMessageModel extends ChatMessage {
       );
     }
 
+    List<ChatEntity>? entitiesList;
+    if (json['entities'] is List) {
+      final rawList = json['entities'] as List;
+      entitiesList = <ChatEntity>[];
+      for (final item in rawList) {
+        if (item is Map) {
+          final parsed = ChatEntityParser.fromJson(
+            Map<String, dynamic>.from(item),
+          );
+          if (parsed != null) {
+            entitiesList.add(parsed);
+          }
+        }
+      }
+    }
+
     return ChatMessageModel(
       id: json['id'] as String,
       senderId: json['senderId'] as String,
@@ -49,6 +68,7 @@ class ChatMessageModel extends ChatMessage {
       replyToText: json['replyToText'] as String?,
       isForwarded: json['isForwarded'] as bool?,
       reactions: reactionsMap,
+      entities: entitiesList,
     );
   }
 
@@ -66,6 +86,8 @@ class ChatMessageModel extends ChatMessage {
       if (replyToText != null) 'replyToText': replyToText,
       if (isForwarded != null) 'isForwarded': isForwarded,
       if (reactions != null) 'reactions': reactions,
+      if (entities != null && entities!.isNotEmpty)
+        'entities': entities!.map((e) => e.toJson()).toList(),
     };
   }
 }
